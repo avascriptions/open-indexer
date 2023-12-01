@@ -1,0 +1,6 @@
+.DS_Store
+.idea
+*.output.txt
+/logs.txt
+/config.ini
+/bin/
