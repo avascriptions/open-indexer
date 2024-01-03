@@ -4,13 +4,17 @@ import (
 	"bufio"
 	"fmt"
 	"log"
+	"open-indexer/model"
 	"os"
 	"sort"
 	"strconv"
 	"strings"
-
-	"open-indexer/model"
 )
+
+type Holder struct {
+	Address string
+	Amount  *model.DDecimal
+}
 
 func LoadTransactionData(fname string) ([]*model.Transaction, error) {
 
@@ -72,6 +76,69 @@ func LoadTransactionData(fname string) ([]*model.Transaction, error) {
 	return trxs, nil
 }
 
+func LoadLogData(fname string) ([]*model.EvmLog, error) {
+
+	file, err := os.Open(fname)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var logs []*model.EvmLog
+	scanner := bufio.NewScanner(file)
+	max := 4 * 1024 * 1024
+	buf := make([]byte, max)
+	scanner.Buffer(buf, max)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		//log.Printf(line)
+		fields := strings.Split(line, ",")
+
+		if len(fields) != 11 {
+			return nil, fmt.Errorf("invalid data format", len(fields))
+		}
+
+		var log model.EvmLog
+
+		log.Hash = fields[0]
+		log.Address = fields[1]
+		log.Topic0 = fields[2]
+		log.Topic1 = fields[3]
+		log.Topic2 = fields[4]
+		log.Topic3 = fields[5]
+		log.Data = fields[6]
+
+		block, err := strconv.ParseUint(fields[7], 10, 32)
+		if err != nil {
+			return nil, err
+		}
+		log.Block = block
+
+		trxIdx, err := strconv.ParseUint(fields[8], 10, 32)
+		if err != nil {
+			return nil, err
+		}
+		logIdx, err := strconv.ParseUint(fields[9], 10, 32)
+		if err != nil {
+			return nil, err
+		}
+
+		log.TrxIndex = uint32(trxIdx)
+		log.LogIndex = uint32(logIdx)
+
+		blockTime, err := strconv.ParseUint(fields[10], 10, 32)
+		if err != nil {
+			return nil, err
+		}
+		log.Timestamp = blockTime
+
+		logs = append(logs, &log)
+	}
+
+	return logs, nil
+}
+
 func DumpTickerInfoMap(fname string,
 	tokens map[string]*model.Token,
 	userBalances map[string]map[string]*model.DDecimal,
@@ -105,23 +172,26 @@ func DumpTickerInfoMap(fname string,
 		)
 
 		// holders
-		var allHolders []string
-		for holder := range tokenHolders[ticker] {
+		var allHolders []Holder
+		for address := range tokenHolders[ticker] {
+			holder := Holder{
+				address,
+				tokenHolders[ticker][address],
+			}
 			allHolders = append(allHolders, holder)
 		}
+
 		sort.SliceStable(allHolders, func(i, j int) bool {
-			return allHolders[i] < allHolders[j]
+			return allHolders[i].Amount.Cmp(allHolders[j].Amount) > 0
 		})
 
 		// holders
 		for _, holder := range allHolders {
-			balance := tokenHolders[ticker][holder]
 
-			fmt.Fprintf(file, "%s %s  balance: %s, tokens: %d\n",
+			fmt.Fprintf(file, "%s %s  balance: %s\n",
 				info.Tick,
-				holder,
-				balance.String(),
-				len(userBalances[holder]),
+				holder.Address,
+				holder.Amount.String(),
 			)
 		}
 	}
