@@ -441,6 +441,7 @@ func listToken(asc20 *model.Asc20, params map[string]string) (int8, error) {
 	if !exists {
 		return -33, nil
 	}
+	asc20.Tick = token.Tick
 
 	// check precision
 	if precision > token.Precision {
