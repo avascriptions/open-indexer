@@ -103,10 +103,7 @@ func LoadLogData(fname string) ([]*model.EvmLog, error) {
 
 		log.Hash = fields[0]
 		log.Address = fields[1]
-		log.Topic0 = fields[2]
-		log.Topic1 = fields[3]
-		log.Topic2 = fields[4]
-		log.Topic3 = fields[5]
+		log.Topics = []string{fields[2], fields[3], fields[4], fields[5]}
 		log.Data = fields[6]
 
 		block, err := strconv.ParseUint(fields[7], 10, 32)
@@ -163,11 +160,12 @@ func DumpTickerInfoMap(fname string,
 	for _, ticker := range allTickers {
 		info := tokens[ticker]
 
-		fmt.Fprintf(file, "%s trxs: %d, total: %s, minted: %s, holders: %d\n",
+		fmt.Fprintf(file, "%s trxs: %d, total: %s, minted: %s, progress: %d, holders: %d\n",
 			info.Tick,
 			info.Trxs,
 			info.Max.String(),
 			info.Minted,
+			info.Progress,
 			len(tokenHolders[ticker]),
 		)
 
@@ -182,14 +180,16 @@ func DumpTickerInfoMap(fname string,
 		}
 
 		sort.SliceStable(allHolders, func(i, j int) bool {
+			if allHolders[i].Amount.Cmp(allHolders[j].Amount) == 0 {
+				return allHolders[i].Address < allHolders[j].Address
+			}
 			return allHolders[i].Amount.Cmp(allHolders[j].Amount) > 0
 		})
 
 		// holders
 		for _, holder := range allHolders {
 
-			fmt.Fprintf(file, "%s %s  balance: %s\n",
-				info.Tick,
+			fmt.Fprintf(file, "%s,%s\n",
 				holder.Address,
 				holder.Amount.String(),
 			)
