@@ -7,14 +7,14 @@ import (
 )
 
 var (
-	inputfile1 string
-	inputfile2 string
+	// inputfile1 string
+	// inputfile2 string
 	outputfile string
 )
 
 func init() {
-	flag.StringVar(&inputfile1, "transactions", "./data/transactions.input.txt", "the filename of input data, default(./data/transactions.input.txt)")
-	flag.StringVar(&inputfile2, "logs", "./data/logs.input.txt", "the filename of input data, default(./data/logs.input.txt)")
+	// flag.StringVar(&inputfile1, "transactions", "./data/transactions.input.txt", "the filename of input data, default(./data/transactions.input.txt)")
+	// flag.StringVar(&inputfile2, "logs", "./data/logs.input.txt", "the filename of input data, default(./data/logs.input.txt)")
 	flag.StringVar(&outputfile, "output", "./data/asc20.output.txt", "the filename of output result, default(./data/asc20.output.txt)")
 
 	flag.Parse()
@@ -26,27 +26,16 @@ func main() {
 
 	logger.Info("start index")
 
-	trxs, err := loader.LoadTransactionData(inputfile1)
+	var err error
+	err = handlers.SyncFromMongo()
 	if err != nil {
-		logger.Fatalf("invalid input, %s", err)
+		logger.Fatalf("sync error, %s", err)
 	}
 
-	logs, err := loader.LoadLogData(inputfile2)
-	if err != nil {
-		logger.Fatalf("invalid input, %s", err)
-	}
-
-	records := handlers.MixRecords(trxs, logs)
-
-	err = handlers.ProcessRecords(records)
-	if err != nil {
-		logger.Fatalf("process error, %s", err)
-	}
-
-	logger.Info("successed")
-
+	logger.Info("start print")
 	// print
 	tokens, userBalances, tokenHolders := handlers.GetInfo()
 	loader.DumpTickerInfoMap(outputfile, tokens, userBalances, tokenHolders)
 
+	logger.Info("successed")
 }

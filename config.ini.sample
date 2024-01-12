@@ -1,0 +1,7 @@
+[mongo]
+uri=mongodb://127.0.0.1:27017/database
+
+[sync]
+start=38234549
+end=0
+size=10

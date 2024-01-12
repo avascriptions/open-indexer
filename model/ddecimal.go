@@ -38,6 +38,9 @@ func (dd *DDecimal) Sign() int {
 }
 
 func (dd *DDecimal) String() string {
+	if dd == nil {
+		return "0"
+	}
 	return dd.value.String()
 }
 

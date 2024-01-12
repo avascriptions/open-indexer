@@ -6,15 +6,16 @@ import (
 	"errors"
 	"open-indexer/model"
 	"open-indexer/utils"
+	"os"
 	"sort"
 	"strings"
 	"time"
 )
 
 // The following data is only stored in memory, in practice it should be stored in a database such as mysql or mongodb
-var inscriptions []*model.Inscription
-var logEvents []*model.EvmLog
-var asc20Records []*model.Asc20
+// var inscriptions []*model.Inscription
+// var logEvents []*model.EvmLog
+// var asc20Records []*model.Asc20
 var tokens = make(map[string]*model.Token)
 var userBalances = make(map[string]map[string]*model.DDecimal)
 var tokenHolders = make(map[string]map[string]*model.DDecimal)
@@ -22,6 +23,8 @@ var tokensByHash = make(map[string]*model.Token)
 var lists = make(map[string]*model.List)
 
 var inscriptionNumber uint64 = 0
+
+var asc20File *os.File
 
 func GetInfo() (map[string]*model.Token, map[string]map[string]*model.DDecimal, map[string]map[string]*model.DDecimal) {
 	return tokens, userBalances, tokenHolders
@@ -79,6 +82,10 @@ func ProcessRecords(records []*model.Record) error {
 }
 
 func indexTransaction(trx *model.Transaction) error {
+	// filter
+	if ignoreHashes[trx.Id] {
+		return nil
+	}
 	// data:,
 	if !strings.HasPrefix(trx.Input, "0x646174613a") {
 		return nil
@@ -120,20 +127,21 @@ func indexTransaction(trx *model.Transaction) error {
 		}
 	}
 
-	inscriptions = append(inscriptions, &inscription)
+	// todo: save inscription
+	// inscriptions = append(inscriptions, &inscription)
 
 	return nil
 }
 
 func indexLog(log *model.EvmLog) error {
-	if log.Topic0 == "" {
+	if len(log.Topics) < 3 {
 		return nil
 	}
 	var topicType uint8
-	if log.Topic0 == "0x8cdf9e10a7b20e7a9c4e778fc3eb28f2766e438a9856a62eac39fbd2be98cbc2" {
+	if log.Topics[0] == "0x8cdf9e10a7b20e7a9c4e778fc3eb28f2766e438a9856a62eac39fbd2be98cbc2" {
 		// avascriptions_protocol_TransferASC20Token(address,address,string,uint256)
 		topicType = 1
-	} else if log.Topic0 == "0xe2750d6418e3719830794d3db788aa72febcd657bcd18ed8f1facdbf61a69a9a" {
+	} else if log.Topics[0] == "0xe2750d6418e3719830794d3db788aa72febcd657bcd18ed8f1facdbf61a69a9a" {
 		// avascriptions_protocol_TransferASC20TokenForListing(address,address,bytes32)
 		topicType = 2
 	} else {
@@ -142,15 +150,16 @@ func indexLog(log *model.EvmLog) error {
 
 	var asc20 model.Asc20
 	asc20.Operation = "transfer"
-	asc20.From = utils.TopicToAddress(log.Topic1)
-	asc20.To = utils.TopicToAddress(log.Topic2)
+	asc20.From = utils.TopicToAddress(log.Topics[1])
+	asc20.To = utils.TopicToAddress(log.Topics[2])
 	asc20.Block = log.Block
 	asc20.Timestamp = log.Timestamp
 	asc20.Hash = log.Hash
 	if topicType == 1 {
 		// transfer
 		if asc20.From == log.Address {
-			token, ok := tokensByHash[log.Topic3[2:]]
+			topic3 := log.Topics[3]
+			token, ok := tokensByHash[topic3[2:]]
 			if ok {
 				asc20.Tick = token.Tick
 
@@ -208,21 +217,22 @@ func indexLog(log *model.EvmLog) error {
 		}
 	}
 
-	// save asc20 record
-	asc20Records = append(asc20Records, &asc20)
+	// todo: save asc20 record
+	// asc20Records = append(asc20Records, &asc20)
+	// saveASC20(&asc20)
 
-	// save log
-	logEvents = append(logEvents, log)
+	// todo: save log
+	// logEvents = append(logEvents, log)
 	return nil
 }
 
 func handleProtocols(inscription *model.Inscription) error {
 	content := strings.TrimSpace(inscription.Content)
-	if content[0] == '{' {
+	if len(content) > 0 && content[0] == '{' {
 		var protoData map[string]string
 		err := json.Unmarshal([]byte(content), &protoData)
 		if err != nil {
-			logger.Info("json parse error: ", err, ", at ", inscription.Number)
+			//logger.Info("json parse error: ", err, ", at ", inscription.Number)
 		} else {
 			value, ok := protoData["p"]
 			if ok && strings.TrimSpace(value) != "" {
@@ -262,8 +272,9 @@ func handleProtocols(inscription *model.Inscription) error {
 						return err
 					}
 
-					// save asc20 records
-					asc20Records = append(asc20Records, &asc20)
+					// todo: save asc20 records
+					// asc20Records = append(asc20Records, &asc20)
+					// saveASC20(&asc20)
 					return nil
 				}
 			}
@@ -310,9 +321,10 @@ func deployToken(asc20 *model.Asc20, params map[string]string) (int8, error) {
 
 	// 已经 deploy
 	asc20.Tick = strings.TrimSpace(asc20.Tick) // trim tick
-	_, exists := tokens[strings.ToLower(asc20.Tick)]
+	lowerTick := strings.ToLower(asc20.Tick)
+	_, exists := tokens[lowerTick]
 	if exists {
-		logger.Info("token ", asc20.Tick, " has deployed at ", asc20.Number)
+		//logger.Info("token ", asc20.Tick, " has deployed at ", asc20.Number)
 		return -17, nil
 	}
 
@@ -330,8 +342,8 @@ func deployToken(asc20 *model.Asc20, params map[string]string) (int8, error) {
 	}
 
 	// save
-	tokens[strings.ToLower(token.Tick)] = token
-	tokenHolders[strings.ToLower(token.Tick)] = make(map[string]*model.DDecimal)
+	tokens[lowerTick] = token
+	tokenHolders[lowerTick] = make(map[string]*model.DDecimal)
 	tokensByHash[token.Hash] = token
 
 	return 1, nil
@@ -350,8 +362,8 @@ func mintToken(asc20 *model.Asc20, params map[string]string) (int8, error) {
 	asc20.Amount = amt
 
 	// check token
-	tick := strings.ToLower(asc20.Tick)
-	token, exists := tokens[tick]
+	lowerTick := strings.ToLower(asc20.Tick)
+	token, exists := tokens[lowerTick]
 	if !exists {
 		return -23, nil
 	}
@@ -384,7 +396,7 @@ func mintToken(asc20 *model.Asc20, params map[string]string) (int8, error) {
 	asc20.Amount = amt
 	asc20.Precision = precision
 
-	newHolder, err := addBalance(asc20.To, tick, amt)
+	newHolder, err := addBalance(asc20.To, lowerTick, amt)
 	if err != nil {
 		return 0, err
 	}
@@ -436,8 +448,8 @@ func listToken(asc20 *model.Asc20, params map[string]string) (int8, error) {
 	}
 
 	// check token
-	tick := strings.ToLower(asc20.Tick)
-	token, exists := tokens[tick]
+	lowerTick := strings.ToLower(asc20.Tick)
+	token, exists := tokens[lowerTick]
 	if !exists {
 		return -33, nil
 	}
@@ -460,7 +472,7 @@ func listToken(asc20 *model.Asc20, params map[string]string) (int8, error) {
 	asc20.Amount = amt
 
 	// sub balance
-	reduceHolder, err := subBalance(asc20.From, tick, amt)
+	reduceHolder, err := subBalance(asc20.From, lowerTick, amt)
 	if err != nil {
 		if err.Error() == "insufficient balance" {
 			return -37, nil
@@ -497,8 +509,8 @@ func exchangeToken(list *model.List, sendTo string) (int8, error) {
 	}
 
 	// update token
-	tick := strings.ToLower(list.Tick)
-	token, exists := tokens[tick]
+	lowerTick := strings.ToLower(list.Tick)
+	token, exists := tokens[lowerTick]
 	if !exists {
 		return -33, nil
 	}
@@ -511,15 +523,15 @@ func exchangeToken(list *model.List, sendTo string) (int8, error) {
 
 	// delete list from lists
 	delete(lists, list.InsId)
-	logger.Println("exchange", list.Amount)
+	//logger.Println("exchange", list.Amount)
 	return 1, err
 }
 
 func _transferToken(asc20 *model.Asc20) (int8, error) {
 
 	// check token
-	tick := strings.ToLower(asc20.Tick)
-	token, exists := tokens[tick]
+	lowerTick := strings.ToLower(asc20.Tick)
+	token, exists := tokens[lowerTick]
 	if !exists {
 		return -33, nil
 	}
@@ -543,7 +555,7 @@ func _transferToken(asc20 *model.Asc20) (int8, error) {
 	}
 
 	// From
-	reduceHolder, err := subBalance(asc20.From, tick, asc20.Amount)
+	reduceHolder, err := subBalance(asc20.From, lowerTick, asc20.Amount)
 	if err != nil {
 		if err.Error() == "insufficient balance" {
 			return -37, nil
@@ -552,7 +564,7 @@ func _transferToken(asc20 *model.Asc20) (int8, error) {
 	}
 
 	// To
-	newHolder, err := addBalance(asc20.To, tick, asc20.Amount)
+	newHolder, err := addBalance(asc20.To, lowerTick, asc20.Amount)
 	if err != nil {
 		return 0, err
 	}
@@ -570,7 +582,8 @@ func _transferToken(asc20 *model.Asc20) (int8, error) {
 }
 
 func subBalance(owner string, tick string, amount *model.DDecimal) (bool, error) {
-	token, exists := tokens[strings.ToLower(tick)]
+	lowerTick := strings.ToLower(tick)
+	_, exists := tokens[lowerTick]
 	if !exists {
 		return false, errors.New("token not found")
 	}
@@ -578,8 +591,8 @@ func subBalance(owner string, tick string, amount *model.DDecimal) (bool, error)
 	if !ok {
 		return false, errors.New("insufficient balance")
 	}
-	fromBalance, ok := fromBalances[token.Tick]
-	if amount.Cmp(fromBalance) == 1 {
+	fromBalance, ok := fromBalances[lowerTick]
+	if !ok || fromBalance.Sign() == 0 || amount.Cmp(fromBalance) == 1 {
 		return false, errors.New("insufficient balance")
 	}
 
@@ -591,14 +604,15 @@ func subBalance(owner string, tick string, amount *model.DDecimal) (bool, error)
 	}
 
 	// save
-	fromBalances[token.Tick] = fromBalance
-	tokenHolders[token.Tick][owner] = fromBalance
+	fromBalances[lowerTick] = fromBalance
+	tokenHolders[lowerTick][owner] = fromBalance
 
 	return reduceHolder, nil
 }
 
 func addBalance(owner string, tick string, amount *model.DDecimal) (bool, error) {
-	token, exists := tokens[strings.ToLower(tick)]
+	lowerTick := strings.ToLower(tick)
+	_, exists := tokens[lowerTick]
 	if !exists {
 		return false, errors.New("token not found")
 	}
@@ -608,7 +622,7 @@ func addBalance(owner string, tick string, amount *model.DDecimal) (bool, error)
 		userBalances[owner] = toBalances
 	}
 	var newHolder = false
-	toBalance, ok := toBalances[token.Tick]
+	toBalance, ok := toBalances[lowerTick]
 	if !ok {
 		toBalance = model.NewDecimal()
 		newHolder = true
@@ -621,8 +635,31 @@ func addBalance(owner string, tick string, amount *model.DDecimal) (bool, error)
 	}
 
 	// save
-	toBalances[token.Tick] = toBalance
-	tokenHolders[token.Tick][owner] = toBalance
+	toBalances[lowerTick] = toBalance
+	tokenHolders[lowerTick][owner] = toBalance
 
 	return newHolder, nil
 }
+
+//func saveASC20(asc20 *model.Asc20) {
+//	if asc20.Tick != "avav" {
+//		return
+//	}
+//	if asc20File == nil {
+//		var err error
+//		asc20File, err = os.OpenFile("./data/avav.csv", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0777)
+//		if err != nil {
+//			log.Fatalf("open block index file failed, %s", err)
+//			panic("open asc20 file failed: " + err.Error())
+//		}
+//	}
+//	fmt.Fprintf(asc20File, "%s,%s,%s,%s,%d,%d\n",
+//		asc20.From,
+//		asc20.To,
+//		asc20.Operation,
+//		asc20.Amount.String(),
+//		asc20.Block,
+//		asc20.Valid,
+//	)
+//
+//}
