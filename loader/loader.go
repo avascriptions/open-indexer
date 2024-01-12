@@ -163,11 +163,12 @@ func DumpTickerInfoMap(fname string,
 		}
 		info := tokens[ticker]
 
-		fmt.Fprintf(file, "%s trxs: %d, total: %s, minted: %s, holders: %d\n",
+		fmt.Fprintf(file, "%s trxs: %d, total: %s, minted: %s, progress: %d, holders: %d\n",
 			info.Tick,
 			info.Trxs,
 			info.Max.String(),
 			info.Minted,
+			info.Progress,
 			len(tokenHolders[ticker]),
 		)
 

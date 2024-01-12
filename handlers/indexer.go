@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"math/big"
 	"open-indexer/model"
 	"open-indexer/utils"
 	"os"
@@ -408,7 +409,11 @@ func mintToken(asc20 *model.Asc20, params map[string]string) (int8, error) {
 	if token.Minted.Cmp(token.Max) >= 0 {
 		token.Progress = 1000000
 	} else {
-		token.Progress = int32(utils.ParseInt64(token.Minted.String()) * 1000000 / utils.ParseInt64(token.Max.String()))
+		progress, _ := new(big.Int).SetString(token.Minted.String(), 10)
+		max, _ := new(big.Int).SetString(token.Max.String(), 10)
+		progress.Mul(progress, new(big.Int).SetInt64(1000000))
+		progress.Div(progress, max)
+		token.Progress = int32(progress.Int64())
 	}
 
 	if token.Minted.Cmp(token.Max) == 0 {
