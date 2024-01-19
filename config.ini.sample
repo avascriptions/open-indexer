@@ -8,4 +8,4 @@ port=3030
 [sync]
 start=38234549
 end=0
-size=10
+size=1

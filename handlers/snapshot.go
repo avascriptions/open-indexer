@@ -42,7 +42,7 @@ func InitFromSnapshot(snapfile string) {
 			continue
 		}
 		if nowType == 1 {
-			fetchBlock = uint64(utils.ParseInt64(line)) + 1
+			fetchFromBlock = uint64(utils.ParseInt64(line)) + 1
 		} else if nowType == 2 {
 			tokenCount++
 			readToken(line)
@@ -54,7 +54,7 @@ func InitFromSnapshot(snapfile string) {
 			readBalance(line)
 		}
 	}
-	logger.Printf("init from snapshot, block %d, tokens %d lists %d holders %d", fetchBlock-1, tokenCount, listCount, holderCount)
+	logger.Printf("init from snapshot, block %d, tokens %d lists %d holders %d", fetchFromBlock-1, tokenCount, listCount, holderCount)
 }
 
 func readToken(line string) {

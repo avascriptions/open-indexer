@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"log"
@@ -15,7 +16,7 @@ import (
 var dataStartBlock uint64
 var dataEndBlock uint64
 
-var fetchBlock uint64
+var fetchFromBlock uint64
 var fetchToBlock uint64
 var fetchSize uint64
 
@@ -27,7 +28,7 @@ func init() {
 	dataEndBlock = synCfg.Key("end").MustUint64(0)
 	fetchSize = synCfg.Key("size").MustUint64(1)
 
-	fetchBlock = dataStartBlock
+	fetchFromBlock = dataStartBlock
 
 	if dataEndBlock > 0 && dataStartBlock > dataEndBlock {
 		panic("block number error")
@@ -38,18 +39,23 @@ func SyncBlock() (bool, error) {
 	var trxs []*model.Transaction
 	var logs []*model.EvmLog
 
-	fetchToBlock = fetchBlock + fetchSize - 1
-	//if fetchBlock < 37400000 {
-	//	fetchToBlock = fetchBlock + (fetchSize * 5000) - 1
-	//} else if fetchBlock < 37900000 {
-	//	fetchToBlock = fetchBlock + (fetchSize * 1000) - 1
-	//} else if fetchBlock < 38400000 {
-	//	fetchToBlock = fetchBlock + (fetchSize * 20) - 1
-	//} else if fetchBlock < 38900000 {
-	//	fetchToBlock = fetchBlock + (fetchSize * 10) - 1
-	//} else if fetchBlock < 40000000 {
-	//	fetchToBlock = fetchBlock + (fetchSize * 5) - 1
+	fetchToBlock = fetchFromBlock + fetchSize - 1
+
+	// Modify parameters for faster synchronization
+	//if fetchFromBlock < 37400000 {
+	//	fetchToBlock = fetchFromBlock + 100000 - 1
+	//} else if fetchFromBlock < 37900000 {
+	//	fetchToBlock = fetchFromBlock + 50000 - 1
+	//} else if fetchFromBlock < 38400000 {
+	//	fetchToBlock = fetchFromBlock + 5000 - 1
+	//} else if fetchFromBlock < 38900000 {
+	//	fetchToBlock = fetchFromBlock + 2000 - 1
+	//} else if fetchFromBlock < 40000000 {
+	//	fetchToBlock = fetchFromBlock + 500 - 1
+	//} else if fetchFromBlock < 40560000 {
+	//	fetchToBlock = fetchFromBlock + 1000 - 1
 	//}
+
 	if dataEndBlock > 0 && fetchToBlock > dataEndBlock {
 		fetchToBlock = dataEndBlock
 	}
@@ -63,19 +69,23 @@ func SyncBlock() (bool, error) {
 		var latest model.Transaction
 		result.Decode(&latest)
 		lastestBlock = latest.Block
+		if lastestBlock > fetchFromBlock && lastestBlock-fetchFromBlock < 10 {
+			// It's catching up. read it block by block.
+			fetchSize = 1
+		}
 	}
 
 	if fetchToBlock > lastestBlock {
 		fetchToBlock = lastestBlock
 	}
 
-	if fetchBlock > fetchToBlock {
-		return false, errors.New("no more new block")
+	if fetchFromBlock > fetchToBlock {
+		return false, errors.New(fmt.Sprintf("no more new block, block %d", fetchToBlock))
 	}
 
-	log.Printf("fetch %d to %d", fetchBlock, fetchToBlock)
+	log.Printf("fetch %d to %d", fetchFromBlock, fetchToBlock)
 
-	cur, err := collection.Find(ctx, bson.D{{"block", bson.D{{"$gte", fetchBlock}, {"$lte", fetchToBlock}}}})
+	cur, err := collection.Find(ctx, bson.D{{"block", bson.D{{"$gte", fetchFromBlock}, {"$lte", fetchToBlock}}}})
 	defer cur.Close(ctx)
 	if err != nil {
 		logger.Println(err)
@@ -94,7 +104,7 @@ func SyncBlock() (bool, error) {
 	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	collection = mongodb.Collection("evmlogs")
-	cur, err = collection.Find(ctx, bson.D{{"block", bson.D{{"$gte", fetchBlock}, {"$lte", fetchToBlock}}}})
+	cur, err = collection.Find(ctx, bson.D{{"block", bson.D{{"$gte", fetchFromBlock}, {"$lte", fetchToBlock}}}})
 	defer cur.Close(ctx)
 	if err != nil {
 		return false, err
@@ -123,7 +133,7 @@ func SyncBlock() (bool, error) {
 		snapshot(fetchToBlock)
 	}
 
-	fetchBlock = fetchToBlock + 1
+	fetchFromBlock = fetchToBlock + 1
 
 	return fetchToBlock == dataEndBlock, err
 }

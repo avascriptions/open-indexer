@@ -5,6 +5,7 @@ import (
 	"open-indexer/handlers"
 	"os"
 	"os/signal"
+	"strings"
 	"time"
 )
 
@@ -24,7 +25,7 @@ func main() {
 
 	var logger = handlers.GetLogger()
 
-	logger.Info("start index")
+	logger.Info("start indexer")
 
 	if snapfile != "" {
 		handlers.InitFromSnapshot(snapfile)
@@ -39,7 +40,7 @@ func main() {
 		for !interrupt {
 			finished, err := handlers.SyncBlock()
 			if err != nil {
-				if err.Error() == "no more new block" {
+				if strings.HasPrefix(err.Error(), "no more new block") {
 					logger.Println(err.Error() + ", wait 1s")
 					time.Sleep(time.Duration(1) * time.Second)
 					continue
@@ -52,9 +53,11 @@ func main() {
 			}
 		}
 
-		handlers.StopRpc()
-
 		handlers.Snapshot()
+
+		go func() {
+			handlers.StopRpc()
+		}()
 
 		done <- true
 
