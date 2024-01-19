@@ -3,5 +3,6 @@
 *.output.txt
 /logs.txt
 /config.ini
-/bin/
+/bin
+/snapshots
 ./indexer

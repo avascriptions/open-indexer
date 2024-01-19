@@ -3,39 +3,75 @@ package main
 import (
 	"flag"
 	"open-indexer/handlers"
-	"open-indexer/loader"
+	"os"
+	"os/signal"
+	"time"
 )
 
-var (
-	// inputfile1 string
-	// inputfile2 string
-	outputfile string
-)
+var snapfile = ""
 
 func init() {
-	// flag.StringVar(&inputfile1, "transactions", "./data/transactions.input.txt", "the filename of input data, default(./data/transactions.input.txt)")
-	// flag.StringVar(&inputfile2, "logs", "./data/logs.input.txt", "the filename of input data, default(./data/logs.input.txt)")
-	flag.StringVar(&outputfile, "output", "./data/asc20.output.txt", "the filename of output result, default(./data/asc20.output.txt)")
+	flag.StringVar(&snapfile, "snapshot", "", "the filename of snapshot")
 
 	flag.Parse()
 }
 
 func main() {
 
+	oss := make(chan os.Signal)
+	done := make(chan bool)
+	var interrupt = false
+
 	var logger = handlers.GetLogger()
 
 	logger.Info("start index")
 
-	var err error
-	err = handlers.SyncFromMongo()
-	if err != nil {
-		logger.Fatalf("sync error, %s", err)
+	if snapfile != "" {
+		handlers.InitFromSnapshot(snapfile)
 	}
 
-	logger.Info("start print")
-	// print
-	tokens, userBalances, tokenHolders := handlers.GetInfo()
-	loader.DumpTickerInfoMap(outputfile, tokens, userBalances, tokenHolders)
+	go func() {
+		logger.Info("app is started")
+		for !interrupt {
+			finished, err := handlers.SyncBlock()
+			if err != nil {
+				if err.Error() == "no more new block" {
+					logger.Println(err.Error() + ", wait 1s")
+					time.Sleep(time.Duration(1) * time.Second)
+					continue
+				}
+				logger.Errorln("sync error:", err)
+				break
+			}
+			if finished {
+				break
+			}
+		}
 
-	logger.Info("successed")
+		handlers.Snapshot()
+
+		done <- true
+
+	}()
+
+	stop := func() {
+		interrupt = true
+		<-done
+		logger.Info("gracefully stopped")
+	}
+
+	// 监听信号
+	signal.Notify(oss, os.Interrupt, os.Kill)
+
+	for {
+		select {
+		case <-oss: // kill -9 pid，no effect
+			logger.Info("stop by system...")
+			stop()
+			return
+		case <-done:
+			logger.Info("app is stopped.")
+			return
+		}
+	}
 }

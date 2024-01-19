@@ -138,7 +138,6 @@ func LoadLogData(fname string) ([]*model.EvmLog, error) {
 
 func DumpTickerInfoMap(fname string,
 	tokens map[string]*model.Token,
-	userBalances map[string]map[string]*model.DDecimal,
 	tokenHolders map[string]map[string]*model.DDecimal,
 ) {
 

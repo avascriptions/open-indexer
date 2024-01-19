@@ -11,6 +11,7 @@ type Token struct {
 	Holders     int32
 	Trxs        int32
 	CreatedAt   uint64
-	CompletedAt int64
+	CompletedAt uint64
 	Hash        string
+	Updated     bool
 }

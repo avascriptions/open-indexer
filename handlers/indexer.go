@@ -1,9 +1,12 @@
 package handlers
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"log"
 	"math/big"
 	"open-indexer/model"
 	"open-indexer/utils"
@@ -18,20 +21,22 @@ import (
 // var logEvents []*model.EvmLog
 // var asc20Records []*model.Asc20
 var tokens = make(map[string]*model.Token)
-var userBalances = make(map[string]map[string]*model.DDecimal)
-var tokenHolders = make(map[string]map[string]*model.DDecimal)
 var tokensByHash = make(map[string]*model.Token)
+var tokenHolders = make(map[string]map[string]*model.DDecimal)
 var lists = make(map[string]*model.List)
+
+// Save a list of balances that need to be updated
+var updatedBalances = make(map[string]string)
 
 var inscriptionNumber uint64 = 0
 
 var asc20File *os.File
 
-func GetInfo() (map[string]*model.Token, map[string]map[string]*model.DDecimal, map[string]map[string]*model.DDecimal) {
-	return tokens, userBalances, tokenHolders
+func initIndexer() {
+	// init data from redis or snapshoot
 }
 
-func MixRecords(trxs []*model.Transaction, logs []*model.EvmLog) []*model.Record {
+func mixRecords(trxs []*model.Transaction, logs []*model.EvmLog) []*model.Record {
 	var records []*model.Record
 	for _, trx := range trxs {
 		var record model.Record
@@ -66,7 +71,7 @@ func MixRecords(trxs []*model.Transaction, logs []*model.EvmLog) []*model.Record
 	return records
 }
 
-func ProcessRecords(records []*model.Record) error {
+func processRecords(records []*model.Record) error {
 	logger.Println("records", len(records))
 	var err error
 	for _, record := range records {
@@ -80,6 +85,52 @@ func ProcessRecords(records []*model.Record) error {
 		}
 	}
 	return nil
+}
+
+func saveToRedis() error {
+	// save tokens
+	var count = 0
+	var err error
+	var ctx = context.Background()
+	pipe := rdb.Pipeline()
+	for _, token := range tokens {
+		if token.Updated {
+			count++
+			jsonData, err := json.Marshal(token)
+			if err != nil {
+				logger.Errorln("serialize token error", err.Error())
+				return err
+			}
+			pipe.HSet(ctx, "tokens", token.Tick, string(jsonData))
+			token.Updated = false
+		}
+	}
+	logger.Println("save", count, "tokens success at ", fetchToBlock)
+
+	// save balances
+	count = 0
+	for key, balance := range updatedBalances {
+		owner := key[0:42]
+		tick := key[42:]
+		if balance == "0" {
+			pipe.HDel(ctx, owner, tick)
+			pipe.HDel(ctx, "tick-"+tick, owner)
+		} else {
+			pipe.HSet(ctx, owner, tick, balance)
+			pipe.HSet(ctx, "tick-"+tick, owner, balance)
+		}
+		count++
+	}
+	logger.Println("save", count, "balances success at ", fetchToBlock)
+	updatedBalances = make(map[string]string)
+
+	// save to redis
+	_, err = pipe.Exec(ctx)
+	if err != nil {
+		logger.Errorln("save to redis error", err.Error())
+	}
+
+	return err
 }
 
 func indexTransaction(trx *model.Transaction) error {
@@ -145,6 +196,9 @@ func indexLog(log *model.EvmLog) error {
 	} else if log.Topics[0] == "0xe2750d6418e3719830794d3db788aa72febcd657bcd18ed8f1facdbf61a69a9a" {
 		// avascriptions_protocol_TransferASC20TokenForListing(address,address,bytes32)
 		topicType = 2
+	} else if log.Topics[0] == "b2de1aec31252e2ec7dd0493ffe16c32a9f86939071394c278aad324fea582e2" {
+		// avascriptions_protocol_ListASC20Token(address,address,string,uint256)
+		topicType = 3
 	} else {
 		return nil
 	}
@@ -156,7 +210,7 @@ func indexLog(log *model.EvmLog) error {
 	asc20.Block = log.Block
 	asc20.Timestamp = log.Timestamp
 	asc20.Hash = log.Hash
-	if topicType == 1 {
+	if topicType == 1 || topicType == 3 {
 		// transfer
 		if asc20.From == log.Address {
 			topic3 := log.Topics[3]
@@ -169,8 +223,25 @@ func indexLog(log *model.EvmLog) error {
 				if err != nil {
 					asc20.Valid = -56
 				} else {
-					// do transfer
-					asc20.Valid, err = _transferToken(&asc20)
+					if topicType == 1 {
+						// do transfer
+						asc20.Valid, err = _transferToken(&asc20)
+					} else {
+						// check list
+						if asc20.Block < 40800000 {
+							// No support yet
+							asc20.Valid = -58
+						} else {
+							_, exists := lists[asc20.Hash]
+							if exists {
+								// only the first valid in the same block
+								asc20.Valid = -57
+							} else {
+								// do list
+								asc20.Valid, err = _listToken(&asc20)
+							}
+						}
+					}
 					if err != nil {
 						return err
 					}
@@ -182,7 +253,7 @@ func indexLog(log *model.EvmLog) error {
 			asc20.Valid = -52
 			logger.Warningln("failed to validate transfer from:", asc20.From, "address:", log.Address)
 		}
-	} else {
+	} else if topicType == 2 {
 		// exchange
 		asc20.Operation = "exchange"
 
@@ -329,6 +400,8 @@ func deployToken(asc20 *model.Asc20, params map[string]string) (int8, error) {
 		return -17, nil
 	}
 
+	logger.Info("token ", asc20.Tick, " deployed at ", asc20.Number)
+
 	token := &model.Token{
 		Tick:        asc20.Tick,
 		Number:      asc20.Number,
@@ -338,8 +411,9 @@ func deployToken(asc20 *model.Asc20, params map[string]string) (int8, error) {
 		Minted:      model.NewDecimal(),
 		Progress:    0,
 		CreatedAt:   asc20.Timestamp,
-		CompletedAt: int64(0),
+		CompletedAt: uint64(0),
 		Hash:        utils.Keccak256(strings.ToLower(asc20.Tick)),
+		Updated:     true,
 	}
 
 	// save
@@ -417,11 +491,12 @@ func mintToken(asc20 *model.Asc20, params map[string]string) (int8, error) {
 	}
 
 	if token.Minted.Cmp(token.Max) == 0 {
-		token.CompletedAt = time.Now().Unix()
+		token.CompletedAt = uint64(time.Now().Unix())
 	}
 	if newHolder {
 		token.Holders++
 	}
+	token.Updated = true
 
 	return 1, err
 }
@@ -452,6 +527,14 @@ func listToken(asc20 *model.Asc20, params map[string]string) (int8, error) {
 		return -32, nil
 	}
 
+	asc20.Amount = amt
+	asc20.Precision = precision
+
+	return _listToken(asc20)
+}
+
+func _listToken(asc20 *model.Asc20) (int8, error) {
+
 	// check token
 	lowerTick := strings.ToLower(asc20.Tick)
 	token, exists := tokens[lowerTick]
@@ -461,11 +544,11 @@ func listToken(asc20 *model.Asc20, params map[string]string) (int8, error) {
 	asc20.Tick = token.Tick
 
 	// check precision
-	if precision > token.Precision {
+	if asc20.Precision > token.Precision {
 		return -34, nil
 	}
 
-	if amt.Sign() <= 0 {
+	if asc20.Amount.Sign() <= 0 {
 		return -35, nil
 	}
 
@@ -474,10 +557,8 @@ func listToken(asc20 *model.Asc20, params map[string]string) (int8, error) {
 		return -36, nil
 	}
 
-	asc20.Amount = amt
-
 	// sub balance
-	reduceHolder, err := subBalance(asc20.From, lowerTick, amt)
+	reduceHolder, err := subBalance(asc20.From, lowerTick, asc20.Amount)
 	if err != nil {
 		if err.Error() == "insufficient balance" {
 			return -37, nil
@@ -491,8 +572,8 @@ func listToken(asc20 *model.Asc20, params map[string]string) (int8, error) {
 	list.Owner = asc20.From
 	list.Exchange = asc20.To
 	list.Tick = token.Tick
-	list.Amount = amt
-	list.Precision = precision
+	list.Amount = asc20.Amount
+	list.Precision = asc20.Precision
 
 	lists[list.InsId] = &list
 
@@ -501,6 +582,7 @@ func listToken(asc20 *model.Asc20, params map[string]string) (int8, error) {
 	if reduceHolder {
 		token.Holders--
 	}
+	token.Updated = true
 
 	return 1, err
 }
@@ -525,6 +607,7 @@ func exchangeToken(list *model.List, sendTo string) (int8, error) {
 	if newHolder {
 		token.Holders++
 	}
+	token.Updated = true
 
 	// delete list from lists
 	delete(lists, list.InsId)
@@ -582,6 +665,7 @@ func _transferToken(asc20 *model.Asc20) (int8, error) {
 		token.Holders++
 	}
 	token.Trxs++
+	token.Updated = true
 
 	return 1, err
 }
@@ -592,11 +676,7 @@ func subBalance(owner string, tick string, amount *model.DDecimal) (bool, error)
 	if !exists {
 		return false, errors.New("token not found")
 	}
-	fromBalances, ok := userBalances[owner]
-	if !ok {
-		return false, errors.New("insufficient balance")
-	}
-	fromBalance, ok := fromBalances[lowerTick]
+	fromBalance, ok := tokenHolders[lowerTick][owner]
 	if !ok || fromBalance.Sign() == 0 || amount.Cmp(fromBalance) == 1 {
 		return false, errors.New("insufficient balance")
 	}
@@ -609,8 +689,8 @@ func subBalance(owner string, tick string, amount *model.DDecimal) (bool, error)
 	}
 
 	// save
-	fromBalances[lowerTick] = fromBalance
 	tokenHolders[lowerTick][owner] = fromBalance
+	updatedBalances[owner+lowerTick] = fromBalance.String()
 
 	return reduceHolder, nil
 }
@@ -621,13 +701,8 @@ func addBalance(owner string, tick string, amount *model.DDecimal) (bool, error)
 	if !exists {
 		return false, errors.New("token not found")
 	}
-	toBalances, ok := userBalances[owner]
-	if !ok {
-		toBalances = make(map[string]*model.DDecimal)
-		userBalances[owner] = toBalances
-	}
 	var newHolder = false
-	toBalance, ok := toBalances[lowerTick]
+	toBalance, ok := tokenHolders[lowerTick][owner]
 	if !ok {
 		toBalance = model.NewDecimal()
 		newHolder = true
@@ -635,36 +710,29 @@ func addBalance(owner string, tick string, amount *model.DDecimal) (bool, error)
 
 	toBalance = toBalance.Add(amount)
 
-	if toBalance.Sign() == 0 {
-		newHolder = true
-	}
-
 	// save
-	toBalances[lowerTick] = toBalance
 	tokenHolders[lowerTick][owner] = toBalance
+	updatedBalances[owner+lowerTick] = toBalance.String()
 
 	return newHolder, nil
 }
 
-//func saveASC20(asc20 *model.Asc20) {
-//	if asc20.Tick != "avav" {
-//		return
-//	}
-//	if asc20File == nil {
-//		var err error
-//		asc20File, err = os.OpenFile("./data/avav.csv", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0777)
-//		if err != nil {
-//			log.Fatalf("open block index file failed, %s", err)
-//			panic("open asc20 file failed: " + err.Error())
-//		}
-//	}
-//	fmt.Fprintf(asc20File, "%s,%s,%s,%s,%d,%d\n",
-//		asc20.From,
-//		asc20.To,
-//		asc20.Operation,
-//		asc20.Amount.String(),
-//		asc20.Block,
-//		asc20.Valid,
-//	)
-//
-//}
+func saveASC20(asc20 *model.Asc20) {
+	if asc20File == nil {
+		var err error
+		asc20File, err = os.OpenFile("./data/asc20.csv", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0777)
+		if err != nil {
+			log.Fatalf("open block index file failed, %s", err)
+			panic("open asc20 file failed: " + err.Error())
+		}
+	}
+	fmt.Fprintf(asc20File, "%s,%s,%s,%s,%d,%d\n",
+		asc20.From,
+		asc20.To,
+		asc20.Operation,
+		asc20.Amount.String(),
+		asc20.Block,
+		asc20.Valid,
+	)
+
+}

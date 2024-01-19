@@ -30,6 +30,17 @@ func BoolToUint32(b bool) uint32 {
 	return 0
 }
 
+func ParseInt32(str string) int32 {
+	if strings.Contains(str, ".") {
+		str = strings.Split(str, ".")[0]
+	}
+	rst, err := strconv.ParseInt(str, 10, 32)
+	if err != nil {
+		return 0
+	} else {
+		return int32(rst)
+	}
+}
 func ParseInt64(str string) int64 {
 	if strings.Contains(str, ".") {
 		str = strings.Split(str, ".")[0]
