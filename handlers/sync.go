@@ -38,19 +38,18 @@ func SyncBlock() (bool, error) {
 	var trxs []*model.Transaction
 	var logs []*model.EvmLog
 
-	//38714454
 	fetchToBlock = fetchBlock + fetchSize - 1
-	if fetchBlock < 37400000 {
-		fetchToBlock = fetchBlock + (fetchSize * 5000) - 1
-	} else if fetchBlock < 37900000 {
-		fetchToBlock = fetchBlock + (fetchSize * 1000) - 1
-	} else if fetchBlock < 38400000 {
-		fetchToBlock = fetchBlock + (fetchSize * 20) - 1
-	} else if fetchBlock < 38900000 {
-		fetchToBlock = fetchBlock + (fetchSize * 10) - 1
-	} else if fetchBlock < 40000000 {
-		fetchToBlock = fetchBlock + (fetchSize * 5) - 1
-	}
+	//if fetchBlock < 37400000 {
+	//	fetchToBlock = fetchBlock + (fetchSize * 5000) - 1
+	//} else if fetchBlock < 37900000 {
+	//	fetchToBlock = fetchBlock + (fetchSize * 1000) - 1
+	//} else if fetchBlock < 38400000 {
+	//	fetchToBlock = fetchBlock + (fetchSize * 20) - 1
+	//} else if fetchBlock < 38900000 {
+	//	fetchToBlock = fetchBlock + (fetchSize * 10) - 1
+	//} else if fetchBlock < 40000000 {
+	//	fetchToBlock = fetchBlock + (fetchSize * 5) - 1
+	//}
 	if dataEndBlock > 0 && fetchToBlock > dataEndBlock {
 		fetchToBlock = dataEndBlock
 	}

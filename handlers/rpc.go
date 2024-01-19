@@ -36,7 +36,7 @@ func StartRpc() {
 	app.Use(cors.New())
 	//app.Use(notFound)
 
-	api := app.Group("/api/v1", wrapResult)
+	api := app.Group("/v1", wrapResult)
 
 	api.Get("/tokens/", getTokens)
 	api.Get("/token/:tick", getToken)
