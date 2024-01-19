@@ -57,3 +57,13 @@ func (dd *DDecimal) Value() (driver.Value, error) {
 	}
 	return dd.value.String(), nil
 }
+
+func (dd *DDecimal) MarshalJSON() ([]byte, error) {
+	return []byte(dd.String()), nil
+}
+
+func (dd *DDecimal) UnmarshalJSON(data []byte) error {
+	d, _, e := decimal.NewFromString(string(data))
+	dd.value = d
+	return e
+}

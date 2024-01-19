@@ -31,6 +31,10 @@ func main() {
 	}
 
 	go func() {
+		handlers.StartRpc()
+	}()
+
+	go func() {
 		logger.Info("app is started")
 		for !interrupt {
 			finished, err := handlers.SyncBlock()
@@ -47,6 +51,8 @@ func main() {
 				break
 			}
 		}
+
+		handlers.StopRpc()
 
 		handlers.Snapshot()
 

@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -16,7 +15,8 @@ import (
 var cfg *ini.File
 var logger *logrus.Logger
 var mongodb *mongo.Database
-var rdb *redis.ClusterClient
+
+//var rdb *redis.ClusterClient
 
 func init() {
 
@@ -32,7 +32,7 @@ func init() {
 
 	initLogger()
 	initMongo()
-	initRedis()
+	//initRedis()
 }
 
 func initLogger() {
@@ -62,17 +62,17 @@ func initMongo() {
 	mongodb = client.Database(cs.Database)
 }
 
-func initRedis() {
-	dbCfg := cfg.Section("redis")
-	dbUri := dbCfg.Key("uri").String()
-
-	opts, err := redis.ParseClusterURL(dbUri)
-	if err != nil {
-		panic(err)
-	}
-	rdb = redis.NewClusterClient(opts)
-
-}
+//func initRedis() {
+//	dbCfg := cfg.Section("redis")
+//	dbUri := dbCfg.Key("uri").String()
+//
+//	opts, err := redis.ParseClusterURL(dbUri)
+//	if err != nil {
+//		panic(err)
+//	}
+//	rdb = redis.NewClusterClient(opts)
+//
+//}
 
 func GetLogger() *logrus.Logger {
 	return logger

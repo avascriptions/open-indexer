@@ -115,7 +115,7 @@ func SyncBlock() (bool, error) {
 		return false, err
 	}
 
-	err = saveToRedis()
+	err = saveToStorage()
 	if err != nil {
 		return false, err
 	}

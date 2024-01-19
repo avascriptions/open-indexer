@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -23,6 +22,7 @@ import (
 var tokens = make(map[string]*model.Token)
 var tokensByHash = make(map[string]*model.Token)
 var tokenHolders = make(map[string]map[string]*model.DDecimal)
+var balances = make(map[string]map[string]*model.DDecimal)
 var lists = make(map[string]*model.List)
 
 // Save a list of balances that need to be updated
@@ -33,7 +33,7 @@ var inscriptionNumber uint64 = 0
 var asc20File *os.File
 
 func initIndexer() {
-	// init data from redis or snapshoot
+	// init data from storage
 }
 
 func mixRecords(trxs []*model.Transaction, logs []*model.EvmLog) []*model.Record {
@@ -87,48 +87,52 @@ func processRecords(records []*model.Record) error {
 	return nil
 }
 
-func saveToRedis() error {
+/***
+ * Need to write data to storage, next version implement write to local database and initialize from local database,
+ * currently only initialize from snapshot
+ */
+func saveToStorage() error {
 	// save tokens
 	var count = 0
 	var err error
-	var ctx = context.Background()
-	pipe := rdb.Pipeline()
+	//var ctx = context.Background()
+	//pipe := rdb.Pipeline()
 	for _, token := range tokens {
 		if token.Updated {
 			count++
-			jsonData, err := json.Marshal(token)
-			if err != nil {
-				logger.Errorln("serialize token error", err.Error())
-				return err
-			}
-			pipe.HSet(ctx, "tokens", token.Tick, string(jsonData))
+			//jsonData, err := json.Marshal(token)
+			//if err != nil {
+			//	logger.Errorln("serialize token error", err.Error())
+			//	return err
+			//}
+			//pipe.HSet(ctx, "tokens", token.Tick, string(jsonData))
 			token.Updated = false
 		}
 	}
-	logger.Println("save", count, "tokens success at ", fetchToBlock)
+	//logger.Println("save", count, "tokens success at ", fetchToBlock)
 
 	// save balances
 	count = 0
-	for key, balance := range updatedBalances {
-		owner := key[0:42]
-		tick := key[42:]
-		if balance == "0" {
-			pipe.HDel(ctx, owner, tick)
-			pipe.HDel(ctx, "tick-"+tick, owner)
-		} else {
-			pipe.HSet(ctx, owner, tick, balance)
-			pipe.HSet(ctx, "tick-"+tick, owner, balance)
-		}
-		count++
-	}
-	logger.Println("save", count, "balances success at ", fetchToBlock)
+	//for key, balance := range updatedBalances {
+	//	owner := key[0:42]
+	//	tick := key[42:]
+	//	if balance == "0" {
+	//		pipe.HDel(ctx, owner, tick)
+	//		pipe.HDel(ctx, "tick-"+tick, owner)
+	//	} else {
+	//		pipe.HSet(ctx, owner, tick, balance)
+	//		pipe.HSet(ctx, "tick-"+tick, owner, balance)
+	//	}
+	//	count++
+	//}
+	//logger.Println("save", count, "balances success at ", fetchToBlock)
 	updatedBalances = make(map[string]string)
 
 	// save to redis
-	_, err = pipe.Exec(ctx)
-	if err != nil {
-		logger.Errorln("save to redis error", err.Error())
-	}
+	//_, err = pipe.Exec(ctx)
+	//if err != nil {
+	//	logger.Errorln("save to redis error", err.Error())
+	//}
 
 	return err
 }
@@ -692,6 +696,11 @@ func subBalance(owner string, tick string, amount *model.DDecimal) (bool, error)
 	tokenHolders[lowerTick][owner] = fromBalance
 	updatedBalances[owner+lowerTick] = fromBalance.String()
 
+	if _, ok := balances[owner]; !ok {
+		balances[owner] = make(map[string]*model.DDecimal)
+	}
+	balances[owner][lowerTick] = fromBalance
+
 	return reduceHolder, nil
 }
 
@@ -713,6 +722,11 @@ func addBalance(owner string, tick string, amount *model.DDecimal) (bool, error)
 	// save
 	tokenHolders[lowerTick][owner] = toBalance
 	updatedBalances[owner+lowerTick] = toBalance.String()
+
+	if _, ok := balances[owner]; !ok {
+		balances[owner] = make(map[string]*model.DDecimal)
+	}
+	balances[owner][lowerTick] = toBalance
 
 	return newHolder, nil
 }

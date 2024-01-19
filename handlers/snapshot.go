@@ -114,6 +114,11 @@ func readBalance(line string) {
 	balance, _, _ := model.NewDecimalFromString(row[2])
 
 	tokenHolders[tick][address] = balance
+
+	if _, ok := balances[address]; !ok {
+		balances[address] = make(map[string]*model.DDecimal)
+	}
+	balances[address][tick] = balance
 }
 
 func snapshot(block uint64) {

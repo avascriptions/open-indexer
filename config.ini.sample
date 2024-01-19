@@ -1,6 +1,10 @@
 [mongo]
 uri=mongodb://127.0.0.1:27017/database
 
+[rpc]
+host=*
+port=3030
+
 [sync]
 start=38234549
 end=0
