@@ -54,8 +54,6 @@ func SyncBlock() (bool, error) {
 		fetchToBlock = dataEndBlock
 	}
 
-	log.Printf("fetch %d to %d", fetchBlock, fetchToBlock)
-
 	// read trxs
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -74,6 +72,8 @@ func SyncBlock() (bool, error) {
 	if fetchBlock > fetchToBlock {
 		return false, errors.New("no more new block")
 	}
+
+	log.Printf("fetch %d to %d", fetchBlock, fetchToBlock)
 
 	cur, err := collection.Find(ctx, bson.D{{"block", bson.D{{"$gte", fetchBlock}, {"$lte", fetchToBlock}}}})
 	defer cur.Close(ctx)

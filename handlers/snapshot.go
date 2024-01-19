@@ -61,10 +61,10 @@ func readToken(line string) {
 	row := strings.Split(line, ",")
 
 	if len(row) != 12 {
-		panic("invalid token format")
+		panic("invalid token format:" + line)
 	}
 	var token model.Token
-	token.Tick = row[0]
+	token.Tick = strings.Replace(row[0], "[*_*]", ",", -1)
 	token.Number = uint64(utils.ParseInt64(row[1]))
 	token.Precision = int(utils.ParseInt32(row[2]))
 	token.Max, _, _ = model.NewDecimalFromString(row[3])
@@ -88,14 +88,14 @@ func readList(line string) {
 	row := strings.Split(line, ",")
 
 	if len(row) != 6 {
-		panic("invalid list format")
+		panic("invalid list format:" + line)
 	}
 
 	var list model.List
 	list.InsId = row[0]
 	list.Owner = row[1]
 	list.Exchange = row[2]
-	list.Tick = row[3]
+	list.Tick = strings.Replace(row[3], "[*_*]", ",", -1)
 	list.Amount, _, _ = model.NewDecimalFromString(row[4])
 	list.Precision = int(utils.ParseInt32(row[5]))
 
@@ -106,10 +106,10 @@ func readBalance(line string) {
 	row := strings.Split(line, ",")
 
 	if len(row) != 3 {
-		panic("invalid balance format")
+		panic("invalid balance format:" + line)
 	}
 
-	tick := row[0]
+	tick := strings.Replace(row[0], "[*_*]", ",", -1)
 	address := row[1]
 	balance, _, _ := model.NewDecimalFromString(row[2])
 
@@ -133,7 +133,7 @@ func snapshot(block uint64) {
 	fmt.Fprintf(file, "-- tokens\n")
 	for _, token := range tokens {
 		fmt.Fprintf(file, "%s,%d,%d,%s,%s,%s,%d,%d,%d,%d,%d,%s\n",
-			token.Tick,
+			strings.Replace(token.Tick, ",", "[*_*]", -1),
 			token.Number,
 			token.Precision,
 			token.Max.String(),
@@ -155,7 +155,7 @@ func snapshot(block uint64) {
 			list.InsId,
 			list.Owner,
 			list.Exchange,
-			list.Tick,
+			strings.Replace(list.Tick, ",", "[*_*]", -1),
 			list.Amount.String(),
 			list.Precision,
 		)
@@ -172,7 +172,7 @@ func snapshot(block uint64) {
 			}
 			userCount++
 			fmt.Fprintf(file, "%s,%s,%s\n",
-				tick,
+				strings.Replace(tick, ",", "[*_*]", -1),
 				address,
 				balance.String(),
 			)
