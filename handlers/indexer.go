@@ -200,7 +200,7 @@ func indexLog(log *model.EvmLog) error {
 	} else if log.Topics[0] == "0xe2750d6418e3719830794d3db788aa72febcd657bcd18ed8f1facdbf61a69a9a" {
 		// avascriptions_protocol_TransferASC20TokenForListing(address,address,bytes32)
 		topicType = 2
-	} else if log.Topics[0] == "b2de1aec31252e2ec7dd0493ffe16c32a9f86939071394c278aad324fea582e2" {
+	} else if log.Topics[0] == "0xb2de1aec31252e2ec7dd0493ffe16c32a9f86939071394c278aad324fea582e2" {
 		// avascriptions_protocol_ListASC20Token(address,address,string,uint256)
 		topicType = 3
 	} else {
@@ -232,7 +232,7 @@ func indexLog(log *model.EvmLog) error {
 						asc20.Valid, err = _transferToken(&asc20)
 					} else {
 						// check list
-						if asc20.Block < 40800000 {
+						if asc20.Block < 41000000 {
 							// No support yet
 							asc20.Valid = -58
 						} else {
