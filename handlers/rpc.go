@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/cors"
+	"google.golang.org/protobuf/proto"
 	"log"
 	"open-indexer/model"
+	"open-indexer/model/serialize"
+	"open-indexer/utils"
 	"regexp"
 	"strings"
 )
@@ -43,6 +46,10 @@ func StartRpc() {
 	api.Get("/token/:tick/holders", getTokenHolders)
 	api.Get("/address/:addr", getAddress)
 	api.Get("/address/:addr/:tick", getAddress)
+	api.Get("/records", getRecordsByBlock)
+	//api.Get("/records-by-address/:address", getRecordsByAddress)
+	api.Get("/records-by-txid/:txid", getRecordsByTxId)
+	api.Get("/snapshot/create", createSnapshot)
 
 	log.Fatal(app.Listen(fmt.Sprintf("%s:%d", rpcHost, rpcPort)))
 }
@@ -68,7 +75,6 @@ func isNumeric(s string) bool {
 
 func wrapResult(c fiber.Ctx) error {
 	err := c.Next()
-	log.Println("body")
 	body := string(c.Response().Body())
 	if !(strings.HasPrefix(body, "{") || strings.HasPrefix(body, "[") || isNumeric(body) || body == "true" || body == "false") {
 		body = "\"" + body + "\""
@@ -121,4 +127,62 @@ func getAddress(c fiber.Ctx) error {
 		}
 	}
 	return c.JSON(addrBalances)
+}
+
+func getRecordsByBlock(c fiber.Ctx) error {
+	// read tokens
+	fromBlock := utils.ParseInt64(c.Query("fromBlock", "0"))
+	toBlock := utils.ParseInt64(c.Query("toBlock", "0"))
+	if fromBlock <= 0 {
+		return errors.New("fromBlock parameter error")
+	}
+	if toBlock <= 0 || toBlock < fromBlock {
+		return errors.New("toBlock parameter error")
+	}
+
+	fromKey := fmt.Sprintf("r-%d-0", fromBlock)
+	//toKey := fmt.Sprintf("r-%d", toBlock)
+	iter := db.NewIterator(nil, nil)
+
+	var result []*serialize.ProtoRecord
+	var count uint32
+	for ok := iter.Seek([]byte(fromKey)); ok; ok = iter.Next() {
+		keys := strings.Split(string(iter.Key()), "-")
+		block := utils.ParseInt64(keys[1])
+		if block > toBlock {
+			break
+		}
+		record := &serialize.ProtoRecord{}
+		err := proto.Unmarshal(iter.Value(), record)
+		if err != nil {
+			return errors.New("read token error")
+		}
+		result = append(result, record)
+		if count++; count >= 10000 {
+			// max item is 10000
+			break
+		}
+	}
+	iter.Release()
+
+	return c.JSON(result)
+}
+
+//func getRecordsByAddress(c fiber.Ctx) error {
+//	return nil
+//}
+
+func getRecordsByTxId(c fiber.Ctx) error {
+	// todo: ?
+	return nil
+}
+
+func createSnapshot(c fiber.Ctx) error {
+	block := c.Query("block", "0")
+	if block == "0" {
+		createSnapshotFlag = true
+	} else {
+		createSnapshotBlock = uint64(utils.ParseInt64(block))
+	}
+	return nil
 }

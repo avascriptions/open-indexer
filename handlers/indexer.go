@@ -4,8 +4,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"log"
 	"math/big"
 	"open-indexer/model"
 	"open-indexer/utils"
@@ -18,7 +16,7 @@ import (
 // The following data is only stored in memory, in practice it should be stored in a database such as mysql or mongodb
 // var inscriptions []*model.Inscription
 // var logEvents []*model.EvmLog
-// var asc20Records []*model.Asc20
+
 var tokens = make(map[string]*model.Token)
 var tokensByHash = make(map[string]*model.Token)
 var tokenHolders = make(map[string]map[string]*model.DDecimal)
@@ -26,15 +24,13 @@ var balances = make(map[string]map[string]*model.DDecimal)
 var lists = make(map[string]*model.List)
 
 // Save a list of balances that need to be updated
+var asc20Records []*model.Asc20
 var updatedBalances = make(map[string]string)
+var updatedLists = make(map[string]bool)
 
 var inscriptionNumber uint64 = 0
 
 var asc20File *os.File
-
-func initIndexer() {
-	// init data from storage
-}
 
 func mixRecords(trxs []*model.Transaction, logs []*model.EvmLog) []*model.Record {
 	var records []*model.Record
@@ -85,56 +81,6 @@ func processRecords(records []*model.Record) error {
 		}
 	}
 	return nil
-}
-
-/***
- * Need to write data to storage, next version implement write to local database and initialize from local database,
- * currently only initialize from snapshot
- */
-func saveToStorage() error {
-	// save tokens
-	var count = 0
-	var err error
-	//var ctx = context.Background()
-	//pipe := rdb.Pipeline()
-	for _, token := range tokens {
-		if token.Updated {
-			count++
-			//jsonData, err := json.Marshal(token)
-			//if err != nil {
-			//	logger.Errorln("serialize token error", err.Error())
-			//	return err
-			//}
-			//pipe.HSet(ctx, "tokens", token.Tick, string(jsonData))
-			token.Updated = false
-		}
-	}
-	//logger.Println("save", count, "tokens success at ", fetchToBlock)
-
-	// save balances
-	count = 0
-	//for key, balance := range updatedBalances {
-	//	owner := key[0:42]
-	//	tick := key[42:]
-	//	if balance == "0" {
-	//		pipe.HDel(ctx, owner, tick)
-	//		pipe.HDel(ctx, "tick-"+tick, owner)
-	//	} else {
-	//		pipe.HSet(ctx, owner, tick, balance)
-	//		pipe.HSet(ctx, "tick-"+tick, owner, balance)
-	//	}
-	//	count++
-	//}
-	//logger.Println("save", count, "balances success at ", fetchToBlock)
-	updatedBalances = make(map[string]string)
-
-	// save to redis
-	//_, err = pipe.Exec(ctx)
-	//if err != nil {
-	//	logger.Errorln("save to redis error", err.Error())
-	//}
-
-	return err
 }
 
 func indexTransaction(trx *model.Transaction) error {
@@ -293,12 +239,11 @@ func indexLog(log *model.EvmLog) error {
 		}
 	}
 
-	// todo: save asc20 record
-	// asc20Records = append(asc20Records, &asc20)
-	// saveASC20(&asc20)
+	//  save asc20 record
+	asc20Records = append(asc20Records, &asc20)
 
 	// todo: save log
-	// logEvents = append(logEvents, log)
+	// logEvents = append(l ogEvents, log)
 	return nil
 }
 
@@ -348,9 +293,9 @@ func handleProtocols(inscription *model.Inscription) error {
 						return err
 					}
 
-					// todo: save asc20 records
-					// asc20Records = append(asc20Records, &asc20)
-					// saveASC20(&asc20)
+					// save asc20 records
+					asc20Records = append(asc20Records, &asc20)
+
 					return nil
 				}
 			}
@@ -391,7 +336,7 @@ func deployToken(asc20 *model.Asc20, params map[string]string) (int8, error) {
 		return -16, nil
 	}
 
-	asc20.Max = max
+	asc20.Amount = max
 	asc20.Precision = precision
 	asc20.Limit = limit
 
@@ -491,7 +436,7 @@ func mintToken(asc20 *model.Asc20, params map[string]string) (int8, error) {
 		max, _ := new(big.Int).SetString(token.Max.String(), 10)
 		progress.Mul(progress, new(big.Int).SetInt64(1000000))
 		progress.Div(progress, max)
-		token.Progress = int32(progress.Int64())
+		token.Progress = uint32(progress.Int64())
 	}
 
 	if token.Minted.Cmp(token.Max) == 0 {
@@ -580,6 +525,7 @@ func _listToken(asc20 *model.Asc20) (int8, error) {
 	list.Precision = asc20.Precision
 
 	lists[list.InsId] = &list
+	updatedLists[list.InsId] = true
 
 	token.Trxs++
 
@@ -615,6 +561,8 @@ func exchangeToken(list *model.List, sendTo string) (int8, error) {
 
 	// delete list from lists
 	delete(lists, list.InsId)
+	updatedLists[list.InsId] = false
+
 	//logger.Println("exchange", list.Amount)
 	return 1, err
 }
@@ -729,24 +677,4 @@ func addBalance(owner string, tick string, amount *model.DDecimal) (bool, error)
 	balances[owner][lowerTick] = toBalance
 
 	return newHolder, nil
-}
-
-func saveASC20(asc20 *model.Asc20) {
-	if asc20File == nil {
-		var err error
-		asc20File, err = os.OpenFile("./data/asc20.csv", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0777)
-		if err != nil {
-			log.Fatalf("open block index file failed, %s", err)
-			panic("open asc20 file failed: " + err.Error())
-		}
-	}
-	fmt.Fprintf(asc20File, "%s,%s,%s,%s,%d,%d\n",
-		asc20.From,
-		asc20.To,
-		asc20.Operation,
-		asc20.Amount.String(),
-		asc20.Block,
-		asc20.Valid,
-	)
-
 }

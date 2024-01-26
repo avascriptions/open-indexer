@@ -41,6 +41,7 @@ func ParseInt32(str string) int32 {
 		return int32(rst)
 	}
 }
+
 func ParseInt64(str string) int64 {
 	if strings.Contains(str, ".") {
 		str = strings.Split(str, ".")[0]

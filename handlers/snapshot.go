@@ -11,8 +11,11 @@ import (
 	"time"
 )
 
-func InitFromSnapshot(snapfile string) {
-	file, err := os.Open(snapfile)
+func InitFromSnapshot() {
+	if snapFile == "" {
+		return
+	}
+	file, err := os.Open(snapFile)
 	if err != nil {
 		panic(err)
 	}
@@ -70,9 +73,9 @@ func readToken(line string) {
 	token.Max, _, _ = model.NewDecimalFromString(row[3])
 	token.Limit, _, _ = model.NewDecimalFromString(row[4])
 	token.Minted, _, _ = model.NewDecimalFromString(row[5])
-	token.Progress = utils.ParseInt32(row[6])
-	token.Holders = utils.ParseInt32(row[7])
-	token.Trxs = utils.ParseInt32(row[8])
+	token.Progress = uint32(utils.ParseInt32(row[6]))
+	token.Holders = uint32(utils.ParseInt32(row[7]))
+	token.Trxs = uint32(utils.ParseInt32(row[8]))
 	token.CreatedAt = uint64(utils.ParseInt64(row[9]))
 	token.CompletedAt = uint64(utils.ParseInt64(row[10]))
 	token.Hash = row[11]

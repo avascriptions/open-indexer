@@ -1,21 +1,12 @@
 package main
 
 import (
-	"flag"
 	"open-indexer/handlers"
 	"os"
 	"os/signal"
 	"strings"
 	"time"
 )
-
-var snapfile = ""
-
-func init() {
-	flag.StringVar(&snapfile, "snapshot", "", "the filename of snapshot")
-
-	flag.Parse()
-}
 
 func main() {
 
@@ -27,9 +18,7 @@ func main() {
 
 	logger.Info("start indexer")
 
-	if snapfile != "" {
-		handlers.InitFromSnapshot(snapfile)
-	}
+	handlers.InitFromSnapshot()
 
 	go func() {
 		handlers.StartRpc()
@@ -53,7 +42,7 @@ func main() {
 			}
 		}
 
-		handlers.Snapshot()
+		handlers.CloseDb()
 
 		go func() {
 			handlers.StopRpc()

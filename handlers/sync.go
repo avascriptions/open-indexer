@@ -20,9 +20,11 @@ var fetchFromBlock uint64
 var fetchToBlock uint64
 var fetchSize uint64
 
-var lastestBlock uint64
+var latestBlock uint64
+var createSnapshotFlag bool
+var createSnapshotBlock uint64
 
-func init() {
+func initSync() {
 	synCfg := cfg.Section("sync")
 	dataStartBlock = synCfg.Key("start").MustUint64(0)
 	dataEndBlock = synCfg.Key("end").MustUint64(0)
@@ -65,25 +67,25 @@ func SyncBlock() (bool, error) {
 	defer cancel()
 	trxCollection := mongodb.Collection("transactions")
 	logCollection := mongodb.Collection("evmlogs")
-	if lastestBlock == 0 || fetchToBlock >= lastestBlock {
+	if latestBlock == 0 || fetchToBlock >= latestBlock {
 		result := trxCollection.FindOne(ctx, bson.D{}, options.FindOne().SetSort(bson.D{{"_id", -1}}))
 		var latestTrx model.Transaction
 		result.Decode(&latestTrx)
-		lastestBlock = latestTrx.Block
+		latestBlock = latestTrx.Block
 		result = logCollection.FindOne(ctx, bson.D{}, options.FindOne().SetSort(bson.D{{"_id", -1}}))
 		var latestLog model.EvmLog
 		result.Decode(&latestLog)
-		if latestLog.Block > lastestBlock {
-			lastestBlock = latestLog.Block
+		if latestLog.Block > latestBlock {
+			latestBlock = latestLog.Block
 		}
-		if lastestBlock > fetchFromBlock && lastestBlock-fetchFromBlock < 10 {
+		if latestBlock > fetchFromBlock && latestBlock-fetchFromBlock < 10 {
 			// It's catching up. read it block by block.
 			fetchSize = 1
 		}
 	}
 
-	if fetchToBlock > lastestBlock {
-		fetchToBlock = lastestBlock
+	if fetchToBlock > latestBlock {
+		fetchToBlock = latestBlock
 	}
 
 	if fetchFromBlock > fetchToBlock {
@@ -130,12 +132,17 @@ func SyncBlock() (bool, error) {
 		return false, err
 	}
 
-	err = saveToStorage()
+	err = saveToStorage(fetchToBlock)
 	if err != nil {
 		return false, err
 	}
 
-	if fetchToBlock > 39900000 && fetchToBlock%43200 == 0 {
+	// create a snapshot
+	if createSnapshotFlag || fetchToBlock == createSnapshotBlock {
+		createSnapshotFlag = false
+		if fetchToBlock == createSnapshotBlock {
+			createSnapshotBlock = 0
+		}
 		snapshot(fetchToBlock)
 	}
 

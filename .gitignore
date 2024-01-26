@@ -1,8 +1,9 @@
-.DS_Store
 .idea
+/bin/
+/snapshots/
+*.db/
+.DS_Store
 *.output.txt
 /logs.txt
 /config.ini
-/bin
-/snapshots
 ./indexer
