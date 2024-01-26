@@ -29,6 +29,7 @@ var updatedBalances = make(map[string]string)
 var updatedLists = make(map[string]bool)
 
 var inscriptionNumber uint64 = 0
+var asc20RecordId uint64 = 0
 
 var asc20File *os.File
 
@@ -154,6 +155,9 @@ func indexLog(log *model.EvmLog) error {
 	}
 
 	var asc20 model.Asc20
+	asc20RecordId++
+	asc20.Id = asc20RecordId
+	asc20.Number = 0
 	asc20.Operation = "transfer"
 	asc20.From = utils.TopicToAddress(log.Topics[1])
 	asc20.To = utils.TopicToAddress(log.Topics[2])
@@ -260,6 +264,8 @@ func handleProtocols(inscription *model.Inscription) error {
 				protocol := strings.ToLower(value)
 				if protocol == "asc-20" {
 					var asc20 model.Asc20
+					asc20RecordId++
+					asc20.Id = asc20RecordId
 					asc20.Number = inscription.Number
 					asc20.From = inscription.From
 					asc20.To = inscription.To

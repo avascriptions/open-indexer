@@ -1,8 +1,7 @@
 package handlers
 
 import (
-	"bytes"
-	"encoding/binary"
+	"errors"
 	"fmt"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
@@ -10,6 +9,7 @@ import (
 	"log"
 	"open-indexer/model"
 	"open-indexer/model/serialize"
+	"open-indexer/utils"
 	"strings"
 )
 
@@ -25,12 +25,29 @@ func initFromStorage() error {
 		return err
 	}
 
-	var blockNumber uint64
-	err = binary.Read(bytes.NewReader(value), binary.BigEndian, &blockNumber)
+	blockNumber := utils.BytesToUint64(value)
+	if blockNumber == 0 {
+		return errors.New("read block from database error")
+	}
+	fetchFromBlock = blockNumber + 1
+
+	value, err = db.Get([]byte("h-number"), nil)
 	if err != nil {
 		return err
 	}
-	fetchFromBlock = blockNumber + 1
+	inscriptionNumber = utils.BytesToUint64(value)
+
+	value, err = db.Get([]byte("h-record-id"), nil)
+	if err != nil {
+		return err
+	}
+	asc20RecordId = utils.BytesToUint64(value)
+
+	log.Printf("%d, %d, %d", fetchFromBlock, inscriptionNumber, asc20RecordId)
+
+	//if fetchFromBlock > 0 {
+	//	return errors.New("test here")
+	//}
 
 	// read tokens
 	iter := db.NewIterator(util.BytesPrefix([]byte("t-")), nil)
@@ -172,14 +189,19 @@ func saveToStorage(blockHeight uint64) error {
 		}
 		key := fmt.Sprintf("r-%d-%d", asc20Record.Block, blockIndex)
 		batch.Put([]byte(key), bytes)
+
+		key = fmt.Sprintf("h-%s", asc20Record.Hash)
+		batch.Put([]byte(key), utils.Uint64ToBytes(asc20Record.Block))
 	}
 	logger.Println("saved", len(asc20Records), "records successfully at ", fetchToBlock)
 	asc20Records = make([]*model.Asc20, 0)
 
 	// save block height
-	buffer := new(bytes.Buffer)
-	binary.Write(buffer, binary.BigEndian, blockHeight)
-	batch.Put([]byte("h-block"), buffer.Bytes())
+	batch.Put([]byte("h-block"), utils.Uint64ToBytes(blockHeight))
+	// inscription number
+	batch.Put([]byte("h-number"), utils.Uint64ToBytes(inscriptionNumber))
+	// asc20 id
+	batch.Put([]byte("h-record-id"), utils.Uint64ToBytes(asc20RecordId))
 
 	// batch write
 	err = db.Write(batch, nil)

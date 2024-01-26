@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"github.com/wealdtech/go-merkletree/keccak256"
 	"math/big"
@@ -52,6 +54,21 @@ func ParseInt64(str string) int64 {
 	} else {
 		return rst
 	}
+}
+
+func Uint64ToBytes(value uint64) []byte {
+	buffer := new(bytes.Buffer)
+	binary.Write(buffer, binary.BigEndian, value)
+	return buffer.Bytes()
+}
+
+func BytesToUint64(_bytes []byte) uint64 {
+	var value uint64
+	err := binary.Read(bytes.NewReader(_bytes), binary.BigEndian, &value)
+	if err != nil {
+		return 0
+	}
+	return value
 }
 
 func TopicToAddress(str string) string {

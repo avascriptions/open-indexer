@@ -71,7 +71,6 @@ func initLevelDb() {
 	dbPath := dbCfg.Key("path").String()
 
 	var err error
-	logrus.Println("snapFile", snapFile)
 	if snapFile != "" {
 		_, err := os.Stat(dbPath)
 		if err == nil {

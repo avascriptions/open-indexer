@@ -3,6 +3,7 @@ package model
 import "open-indexer/model/serialize"
 
 type Asc20 struct {
+	Id        uint64
 	Number    uint64
 	Tick      string
 	From      string
@@ -19,6 +20,7 @@ type Asc20 struct {
 
 func (a *Asc20) ToProtoRecord() *serialize.ProtoRecord {
 	protoRecord := &serialize.ProtoRecord{
+		Id:        a.Id,
 		Number:    a.Number,
 		Tick:      a.Tick,
 		From:      a.From,
@@ -39,6 +41,7 @@ func Asc20FromProto(a *serialize.ProtoRecord) *Asc20 {
 	limit, _, _ := NewDecimalFromString(a.Limit)
 	amount, _, _ := NewDecimalFromString(a.Amount)
 	asc20 := &Asc20{
+		Id:        a.Id,
 		Number:    a.Number,
 		Tick:      a.Tick,
 		From:      a.From,
