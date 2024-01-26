@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo/options"
 	"log"
 	"open-indexer/model"
 	"time"
@@ -65,19 +64,17 @@ func SyncBlock() (bool, error) {
 	// read trxs
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	trxCollection := mongodb.Collection("transactions")
-	logCollection := mongodb.Collection("evmlogs")
+
 	if latestBlock == 0 || fetchToBlock >= latestBlock {
-		result := trxCollection.FindOne(ctx, bson.D{}, options.FindOne().SetSort(bson.D{{"_id", -1}}))
-		var latestTrx model.Transaction
-		result.Decode(&latestTrx)
-		latestBlock = latestTrx.Block
-		result = logCollection.FindOne(ctx, bson.D{}, options.FindOne().SetSort(bson.D{{"_id", -1}}))
-		var latestLog model.EvmLog
-		result.Decode(&latestLog)
-		if latestLog.Block > latestBlock {
-			latestBlock = latestLog.Block
+		statusCollection := mongodb.Collection("status")
+		result := statusCollection.FindOne(ctx, bson.D{})
+		if result.Err() != nil {
+			return false, result.Err()
 		}
+		var status model.Status
+		result.Decode(&status)
+		latestBlock = status.Block
+
 		if latestBlock > fetchFromBlock && latestBlock-fetchFromBlock < 10 {
 			// It's catching up. read it block by block.
 			fetchSize = 1
@@ -93,7 +90,7 @@ func SyncBlock() (bool, error) {
 	}
 
 	log.Printf("fetch %d to %d", fetchFromBlock, fetchToBlock)
-
+	trxCollection := mongodb.Collection("transactions")
 	cur, err := trxCollection.Find(ctx, bson.D{{"block", bson.D{{"$gte", fetchFromBlock}, {"$lte", fetchToBlock}}}})
 	defer cur.Close(ctx)
 	if err != nil {
@@ -112,6 +109,7 @@ func SyncBlock() (bool, error) {
 	// read logs
 	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	logCollection := mongodb.Collection("evmlogs")
 	cur, err = logCollection.Find(ctx, bson.D{{"block", bson.D{{"$gte", fetchFromBlock}, {"$lte", fetchToBlock}}}})
 	defer cur.Close(ctx)
 	if err != nil {
