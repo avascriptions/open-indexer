@@ -11,6 +11,7 @@ import (
 	"gopkg.in/ini.v1"
 	"io"
 	"log"
+	"open-indexer/utils"
 	"os"
 	"time"
 )
@@ -26,9 +27,14 @@ var snapFile string
 
 func init() {
 	log.Println("global init")
-
+	var snapshotAt string
 	flag.StringVar(&snapFile, "snapshot", "", "the filename of snapshot")
+	flag.StringVar(&snapshotAt, "snapshot-at", "", "the block that create snapshot")
 	flag.Parse()
+
+	if snapshotAt != "" {
+		createSnapshotBlock = uint64(utils.ParseInt64(snapshotAt))
+	}
 
 	var err error
 	cfg, err = ini.ShadowLoad("config.ini")

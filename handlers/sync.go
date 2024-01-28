@@ -79,6 +79,10 @@ func SyncBlock() (bool, error) {
 			// It's catching up. read it block by block.
 			fetchSize = 1
 		}
+
+		if latestBlock < fetchFromBlock-1 {
+			return false, errors.New("the latest block is smaller than the current block")
+		}
 	}
 
 	if fetchToBlock > latestBlock {
@@ -86,6 +90,7 @@ func SyncBlock() (bool, error) {
 	}
 
 	if fetchFromBlock > fetchToBlock {
+		checkSnapshot()
 		return false, errors.New(fmt.Sprintf("no more new block, block %d", fetchToBlock))
 	}
 
@@ -135,6 +140,14 @@ func SyncBlock() (bool, error) {
 		return false, err
 	}
 
+	checkSnapshot()
+
+	fetchFromBlock = fetchToBlock + 1
+
+	return fetchToBlock == dataEndBlock, err
+}
+
+func checkSnapshot() {
 	// create a snapshot
 	if createSnapshotFlag || fetchToBlock == createSnapshotBlock {
 		createSnapshotFlag = false
@@ -143,12 +156,4 @@ func SyncBlock() (bool, error) {
 		}
 		snapshot(fetchToBlock)
 	}
-
-	fetchFromBlock = fetchToBlock + 1
-
-	return fetchToBlock == dataEndBlock, err
-}
-
-func Snapshot() {
-	snapshot(fetchToBlock)
 }

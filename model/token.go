@@ -1,6 +1,9 @@
 package model
 
-import "open-indexer/model/serialize"
+import (
+	"open-indexer/model/serialize"
+	"open-indexer/utils"
+)
 
 type Token struct {
 	Tick        string    `json:"tick"`
@@ -31,7 +34,7 @@ func (t *Token) ToProtoToken() *serialize.ProtoToken {
 		Trxs:        t.Trxs,
 		CreatedAt:   t.CreatedAt,
 		CompletedAt: t.CompletedAt,
-		Hash:        t.Hash,
+		Hash:        utils.HexStrToBytes(t.Hash),
 	}
 	return protoToken
 }
@@ -52,7 +55,7 @@ func TokenFromProto(t *serialize.ProtoToken) *Token {
 		Trxs:        t.Trxs,
 		CreatedAt:   t.CreatedAt,
 		CompletedAt: t.CompletedAt,
-		Hash:        t.Hash,
+		Hash:        utils.BytesToHexStr(t.Hash),
 		Updated:     false,
 	}
 	return token

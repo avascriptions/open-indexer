@@ -43,7 +43,7 @@ func initFromStorage() error {
 	}
 	asc20RecordId = utils.BytesToUint64(value)
 
-	log.Printf("%d, %d, %d", fetchFromBlock, inscriptionNumber, asc20RecordId)
+	log.Printf("block: %d, number: %d, asc20 id: %d", fetchFromBlock, inscriptionNumber, asc20RecordId)
 
 	//if fetchFromBlock > 0 {
 	//	return errors.New("test here")

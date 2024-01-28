@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/cors"
+	"github.com/syndtr/goleveldb/leveldb/util"
 	"google.golang.org/protobuf/proto"
 	"log"
 	"open-indexer/model"
@@ -76,9 +77,9 @@ func isNumeric(s string) bool {
 func wrapResult(c fiber.Ctx) error {
 	err := c.Next()
 	body := string(c.Response().Body())
-	if !(strings.HasPrefix(body, "{") || strings.HasPrefix(body, "[") || isNumeric(body) || body == "true" || body == "false") {
-		body = "\"" + body + "\""
-	}
+	//if !(strings.HasPrefix(body, "{") || strings.HasPrefix(body, "[") || isNumeric(body) || body == "true" || body == "false") {
+	//	body = "\"" + body + "\""
+	//}
 	resp := fmt.Sprintf(`{"code":200,"data":%s}`, body)
 	c.Set("Content-type", "application/json; charset=utf-8")
 	c.Status(fiber.StatusOK).SendString(resp)
@@ -144,7 +145,7 @@ func getRecordsByBlock(c fiber.Ctx) error {
 	//toKey := fmt.Sprintf("r-%d", toBlock)
 	iter := db.NewIterator(nil, nil)
 
-	var result []*serialize.ProtoRecord
+	var records []*model.Asc20
 	var count uint32
 	for ok := iter.Seek([]byte(fromKey)); ok; ok = iter.Next() {
 		keys := strings.Split(string(iter.Key()), "-")
@@ -152,12 +153,13 @@ func getRecordsByBlock(c fiber.Ctx) error {
 		if block > toBlock {
 			break
 		}
-		record := &serialize.ProtoRecord{}
-		err := proto.Unmarshal(iter.Value(), record)
+		protoRecord := &serialize.ProtoRecord{}
+		err := proto.Unmarshal(iter.Value(), protoRecord)
 		if err != nil {
 			return errors.New("read token error")
 		}
-		result = append(result, record)
+		record := model.Asc20FromProto(protoRecord)
+		records = append(records, record)
 		if count++; count >= 10000 {
 			// max item is 10000
 			break
@@ -165,7 +167,7 @@ func getRecordsByBlock(c fiber.Ctx) error {
 	}
 	iter.Release()
 
-	return c.JSON(result)
+	return c.JSON(records)
 }
 
 //func getRecordsByAddress(c fiber.Ctx) error {
@@ -173,8 +175,29 @@ func getRecordsByBlock(c fiber.Ctx) error {
 //}
 
 func getRecordsByTxId(c fiber.Ctx) error {
-	// todo: ?
-	return nil
+	txid := strings.ToLower(c.Params("txid"))
+	if !strings.HasPrefix(txid, "0x") || len(txid) != 66 {
+		return errors.New("incorrect txid format")
+	}
+	intBytes, err := db.Get([]byte("h-"+txid), nil)
+	if err != nil {
+		return errors.New("txid not found")
+	}
+	block := utils.BytesToUint64(intBytes)
+	iter := db.NewIterator(util.BytesPrefix([]byte(fmt.Sprintf("r-%d-", block))), nil)
+	var records []*model.Asc20
+	for iter.Next() {
+		protoRecord := &serialize.ProtoRecord{}
+		err = proto.Unmarshal(iter.Value(), protoRecord)
+		if err != nil {
+			return err
+		}
+		record := model.Asc20FromProto(protoRecord)
+		if record.Hash == txid {
+			records = append(records, record)
+		}
+	}
+	return c.JSON(records)
 }
 
 func createSnapshot(c fiber.Ctx) error {
@@ -184,5 +207,5 @@ func createSnapshot(c fiber.Ctx) error {
 	} else {
 		createSnapshotBlock = uint64(utils.ParseInt64(block))
 	}
-	return nil
+	return c.JSON("ok")
 }
