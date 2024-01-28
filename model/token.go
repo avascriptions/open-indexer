@@ -55,7 +55,7 @@ func TokenFromProto(t *serialize.ProtoToken) *Token {
 		Trxs:        t.Trxs,
 		CreatedAt:   t.CreatedAt,
 		CompletedAt: t.CompletedAt,
-		Hash:        utils.BytesToHexStr(t.Hash),
+		Hash:        utils.BytesToHexStr(t.Hash)[2:],
 		Updated:     false,
 	}
 	return token

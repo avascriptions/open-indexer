@@ -53,7 +53,7 @@ func Asc20FromProto(a *serialize.ProtoRecord) *Asc20 {
 		Precision: int(a.Precision),
 		Limit:     limit,
 		Amount:    amount,
-		Hash:      utils.BytesToHexStr(a.Hash),
+		Hash:      utils.BytesToHexStr(a.Hash)[2:],
 		Block:     a.Block,
 		Timestamp: a.Timestamp,
 		Valid:     int8(a.Valid),
