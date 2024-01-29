@@ -63,7 +63,7 @@ func InitFromSnapshot() {
 
 		tokenHolders[lowerTick] = make(map[string]*model.DDecimal)
 
-		updatedTokens[token.Tick] = true
+		updatedTokens[lowerTick] = true
 
 		tokenCount++
 	}
@@ -189,6 +189,8 @@ func readToken(line string) {
 	tokensByHash[token.Hash] = &token
 
 	tokenHolders[lowerTick] = make(map[string]*model.DDecimal)
+
+	updatedTokens[lowerTick] = true
 }
 
 func readList(line string) {
@@ -207,6 +209,8 @@ func readList(line string) {
 	list.Precision = int(utils.ParseInt32(row[5]))
 
 	lists[list.InsId] = &list
+
+	updatedLists[list.InsId] = true
 }
 
 func readBalance(line string) {
@@ -217,6 +221,7 @@ func readBalance(line string) {
 	}
 
 	tick := strings.Replace(row[0], "[*_*]", ",", -1)
+	lowerTick := strings.ToLower(tick)
 	address := row[1]
 	balance, _, _ := model.NewDecimalFromString(row[2])
 
@@ -226,6 +231,8 @@ func readBalance(line string) {
 		balances[address] = make(map[string]*model.DDecimal)
 	}
 	balances[address][tick] = balance
+
+	updatedBalances[address+lowerTick] = row[2]
 }
 
 func snapshot(block uint64) {

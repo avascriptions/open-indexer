@@ -370,7 +370,7 @@ func deployToken(asc20 *model.Asc20, params map[string]string) (int8, error) {
 		CompletedAt: uint64(0),
 		Hash:        utils.Keccak256(strings.ToLower(asc20.Tick)),
 	}
-	updatedTokens[token.Tick] = true
+	updatedTokens[lowerTick] = true
 
 	// save
 	tokens[lowerTick] = token
@@ -453,7 +453,7 @@ func mintToken(asc20 *model.Asc20, params map[string]string) (int8, error) {
 		token.Holders++
 	}
 
-	updatedTokens[token.Tick] = true
+	updatedTokens[lowerTick] = true
 
 	return 1, err
 }
@@ -541,7 +541,7 @@ func _listToken(asc20 *model.Asc20) (int8, error) {
 		token.Holders--
 	}
 
-	updatedTokens[token.Tick] = true
+	updatedTokens[lowerTick] = true
 
 	return 1, err
 }
@@ -567,7 +567,7 @@ func exchangeToken(list *model.List, sendTo string) (int8, error) {
 		token.Holders++
 	}
 
-	updatedTokens[token.Tick] = true
+	updatedTokens[lowerTick] = true
 
 	// delete list from lists
 	delete(lists, list.InsId)
@@ -628,7 +628,7 @@ func _transferToken(asc20 *model.Asc20) (int8, error) {
 	}
 	token.Trxs++
 
-	updatedTokens[token.Tick] = true
+	updatedTokens[lowerTick] = true
 
 	return 1, err
 }
