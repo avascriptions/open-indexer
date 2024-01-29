@@ -23,10 +23,11 @@ var tokenHolders = make(map[string]map[string]*model.DDecimal)
 var balances = make(map[string]map[string]*model.DDecimal)
 var lists = make(map[string]*model.List)
 
-// Save a list of balances that need to be updated
 var asc20Records []*model.Asc20
+
 var updatedBalances = make(map[string]string)
 var updatedLists = make(map[string]bool)
+var updatedTokens = make(map[string]bool)
 
 var inscriptionNumber uint64 = 0
 var asc20RecordId uint64 = 0
@@ -368,8 +369,8 @@ func deployToken(asc20 *model.Asc20, params map[string]string) (int8, error) {
 		CreatedAt:   asc20.Timestamp,
 		CompletedAt: uint64(0),
 		Hash:        utils.Keccak256(strings.ToLower(asc20.Tick)),
-		Updated:     true,
 	}
+	updatedTokens[token.Tick] = true
 
 	// save
 	tokens[lowerTick] = token
@@ -451,7 +452,8 @@ func mintToken(asc20 *model.Asc20, params map[string]string) (int8, error) {
 	if newHolder {
 		token.Holders++
 	}
-	token.Updated = true
+
+	updatedTokens[token.Tick] = true
 
 	return 1, err
 }
@@ -538,7 +540,8 @@ func _listToken(asc20 *model.Asc20) (int8, error) {
 	if reduceHolder {
 		token.Holders--
 	}
-	token.Updated = true
+
+	updatedTokens[token.Tick] = true
 
 	return 1, err
 }
@@ -563,7 +566,8 @@ func exchangeToken(list *model.List, sendTo string) (int8, error) {
 	if newHolder {
 		token.Holders++
 	}
-	token.Updated = true
+
+	updatedTokens[token.Tick] = true
 
 	// delete list from lists
 	delete(lists, list.InsId)
@@ -623,7 +627,8 @@ func _transferToken(asc20 *model.Asc20) (int8, error) {
 		token.Holders++
 	}
 	token.Trxs++
-	token.Updated = true
+
+	updatedTokens[token.Tick] = true
 
 	return 1, err
 }

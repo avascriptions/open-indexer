@@ -118,21 +118,19 @@ func saveToStorage(blockHeight uint64) error {
 	batch := new(leveldb.Batch)
 
 	// save tokens
-	for _, token := range tokens {
-		if token.Updated {
-			count++
-			bytes, err := proto.Marshal(token.ToProtoToken())
-			if err != nil {
-				logger.Errorln("serialize token error", err.Error())
-				return err
-			}
-			key := fmt.Sprintf("t-%s", token.Tick)
-			batch.Put([]byte(key), bytes)
-			//pipe.HSet(ctx, "tokens", token.Tick, string(jsonData))
-			token.Updated = false
+	for tick, _ := range updatedTokens {
+		count++
+		token := tokens[tick]
+		bytes, err := proto.Marshal(token.ToProtoToken())
+		if err != nil {
+			logger.Errorln("serialize token error", err.Error())
+			return err
 		}
+		key := fmt.Sprintf("t-%s", token.Tick)
+		batch.Put([]byte(key), bytes)
 	}
 	logger.Println("saved", count, "tokens successfully at ", fetchToBlock)
+	updatedTokens = make(map[string]bool)
 
 	// save balances
 	count = 0

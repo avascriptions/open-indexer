@@ -18,7 +18,6 @@ type Token struct {
 	CreatedAt   uint64    `json:"created_at"`
 	CompletedAt uint64    `json:"completed_at"`
 	Hash        string    `json:"hash"`
-	Updated     bool      `json:"-"`
 }
 
 func (t *Token) ToProtoToken() *serialize.ProtoToken {
@@ -56,7 +55,6 @@ func TokenFromProto(t *serialize.ProtoToken) *Token {
 		CreatedAt:   t.CreatedAt,
 		CompletedAt: t.CompletedAt,
 		Hash:        utils.BytesToHexStr(t.Hash)[2:],
-		Updated:     false,
 	}
 	return token
 }

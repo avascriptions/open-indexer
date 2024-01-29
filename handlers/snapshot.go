@@ -63,12 +63,17 @@ func InitFromSnapshot() {
 
 		tokenHolders[lowerTick] = make(map[string]*model.DDecimal)
 
+		updatedTokens[token.Tick] = true
+
 		tokenCount++
 	}
 
 	for idx := range protoSnapshot.Lists {
 		list := model.ListFromProto(protoSnapshot.Lists[idx])
 		lists[list.InsId] = list
+
+		updatedLists[list.InsId] = true
+
 		listCount++
 	}
 
@@ -79,17 +84,25 @@ func InitFromSnapshot() {
 		for idx2 := range userBalances.Balances {
 			tickBalance := userBalances.Balances[idx2]
 
-			tick := strings.ToLower(tickBalance.Tick)
+			lowerTick := strings.ToLower(tickBalance.Tick)
 			balance, _, _ := model.NewDecimalFromString(tickBalance.Amount)
 
-			balances[address][tick] = balance
-			tokenHolders[tickBalance.Tick][address] = balance
+			balances[address][lowerTick] = balance
+			tokenHolders[lowerTick][address] = balance
+
+			updatedBalances[address+lowerTick] = tickBalance.Amount
 
 			holderCount++
 		}
 	}
 
 	logger.Printf("init from snapshot, block %d, inscriptionNumber %d, asc20RecordId %d, tokens %d lists %d holders %d", fetchFromBlock, inscriptionNumber, asc20RecordId, tokenCount, listCount, holderCount)
+
+	// todo: set
+	//var updatedTokens
+	//var updatedBalances = make(map[string]string)
+	//var updatedLists = make(map[string]bool)
+
 	saveToStorage(fetchFromBlock)
 
 	fetchFromBlock++
