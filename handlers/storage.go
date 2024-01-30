@@ -63,7 +63,6 @@ func initFromStorage() error {
 		tokens[lowerTick] = token
 		tokensByHash[token.Hash] = token
 		tokenHolders[lowerTick] = make(map[string]*model.DDecimal)
-		log.Println(token)
 	}
 	iter.Release()
 
@@ -78,7 +77,6 @@ func initFromStorage() error {
 		list := model.ListFromProto(protoList)
 
 		lists[list.InsId] = list
-		log.Println(list)
 	}
 	iter.Release()
 
@@ -99,7 +97,6 @@ func initFromStorage() error {
 			balances[address] = make(map[string]*model.DDecimal)
 		}
 		balances[address][tick] = balance
-		log.Println(tick, address, balance)
 	}
 	iter.Release()
 
