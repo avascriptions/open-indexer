@@ -168,8 +168,14 @@ func indexLog(log *model.EvmLog) error {
 	if topicType == 1 || topicType == 3 {
 		// transfer
 		if asc20.From == log.Address {
-			topic3 := log.Topics[3]
-			token, ok := tokensByHash[topic3[2:]]
+			hash := "-"
+			if len(log.Topics) > 3 {
+				topic3 := log.Topics[3]
+				if len(topic3) > 2 {
+					hash = topic3[2:]
+				}
+			}
+			token, ok := tokensByHash[hash]
 			if ok {
 				asc20.Tick = token.Tick
 
