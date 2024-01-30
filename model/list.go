@@ -16,7 +16,7 @@ type List struct {
 
 func (l *List) ToProtoList() *serialize.ProtoList {
 	protoRecord := &serialize.ProtoList{
-		InsId:     l.InsId,
+		InsId:     utils.HexStrToBytes(l.InsId),
 		Owner:     utils.HexStrToBytes(l.Owner),
 		Exchange:  utils.HexStrToBytes(l.Exchange),
 		Tick:      l.Tick,
@@ -29,7 +29,7 @@ func (l *List) ToProtoList() *serialize.ProtoList {
 func ListFromProto(l *serialize.ProtoList) *List {
 	amount, _, _ := NewDecimalFromString(l.Amount)
 	asc20 := &List{
-		InsId:     l.InsId,
+		InsId:     utils.BytesToHexStr(l.InsId),
 		Owner:     utils.BytesToHexStr(l.Owner),
 		Exchange:  utils.BytesToHexStr(l.Exchange),
 		Tick:      l.Tick,

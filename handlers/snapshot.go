@@ -258,7 +258,7 @@ func snapshot(block uint64) {
 	// save lists
 	idx = 0
 	for _, list := range lists {
-		msgLists[0] = list.ToProtoList()
+		msgLists[idx] = list.ToProtoList()
 		idx++
 	}
 
