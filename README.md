@@ -12,10 +12,10 @@ We provide an open source program for grabbing data on the chain that can be ref
 ## Snapshot
 Currently the indexed data is not persisted, you must rely on a snapshot to start each time you start, if you do not specify a snapshot, the indexer will start indexing from the initial data.  
 Specify the snapshot file command:   
-./indexer --snapshot snapshots/snap-xxx.txt  
+./indexer --snapshot snapshots/snap-xxx.bin  
 
 Of course if you can't run from the genesis block, you can download snapshots from us and the following snapshots are updated regularly.  
-https://snapshots.avascriptions.com/snap-40564800.zip MD5: 050a2eb5a43616cae727eb4485c8b1f9
+https://snapshots.avascriptions.com/snap-40910400.bin.zip MD5: 64ed913e735069792e8a0898e952e6a0
 
 ## RPC Interfaces
 The indexer implements simple RPC interfaces, the list of interfaces is as follows  
