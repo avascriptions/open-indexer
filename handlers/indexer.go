@@ -70,7 +70,11 @@ func mixRecords(trxs []*model.Transaction, logs []*model.EvmLog) []*model.Record
 }
 
 func processRecords(records []*model.Record) error {
-	logger.Println("records", len(records))
+	if len(records) == 0 {
+		return nil
+	}
+	logger.Println("process ", len(records), " records")
+
 	var err error
 	for _, record := range records {
 		if record.IsLog {

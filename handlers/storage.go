@@ -126,7 +126,9 @@ func saveToStorage(blockHeight uint64) error {
 		key := fmt.Sprintf("t-%s", token.Tick)
 		batch.Put([]byte(key), bytes)
 	}
-	logger.Println("saved", count, "tokens successfully at ", blockHeight)
+	if count > 0 {
+		logger.Println("saved", count, "tokens successfully at ", blockHeight)
+	}
 	updatedTokens = make(map[string]bool)
 
 	// save balances
@@ -143,7 +145,9 @@ func saveToStorage(blockHeight uint64) error {
 		//logger.Println(key, balance)
 		count++
 	}
-	logger.Println("saved", count, "balances successfully at ", blockHeight)
+	if count > 0 {
+		logger.Println("saved", count, "balances successfully at ", blockHeight)
+	}
 	updatedBalances = make(map[string]string)
 
 	// save lists
@@ -163,7 +167,9 @@ func saveToStorage(blockHeight uint64) error {
 		}
 		count++
 	}
-	logger.Println("saved", len(updatedLists), "lists successfully at ", blockHeight)
+	if count > 0 {
+		logger.Println("saved", len(updatedLists), "lists successfully at ", blockHeight)
+	}
 	updatedLists = make(map[string]bool)
 
 	// save asc-20 records
@@ -188,7 +194,9 @@ func saveToStorage(blockHeight uint64) error {
 		key = fmt.Sprintf("h-%s", asc20Record.Hash)
 		batch.Put([]byte(key), utils.Uint64ToBytes(asc20Record.Block))
 	}
-	logger.Println("saved", len(asc20Records), "records successfully at ", blockHeight)
+	if count > 0 {
+		logger.Println("saved", len(asc20Records), "records successfully at ", blockHeight)
+	}
 	asc20Records = make([]*model.Asc20, 0)
 
 	// save block height
