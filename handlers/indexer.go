@@ -193,7 +193,7 @@ func indexLog(log *model.EvmLog) error {
 						asc20.Valid, err = _transferToken(&asc20)
 					} else {
 						// check list
-						if asc20.Block < 41100000 {
+						if asc20.Block < 41500000 {
 							// No support yet
 							asc20.Valid = -58
 						} else {
