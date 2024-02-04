@@ -10,7 +10,6 @@ import (
 	"go.mongodb.org/mongo-driver/x/mongo/driver/connstring"
 	"gopkg.in/ini.v1"
 	"io"
-	"log"
 	"open-indexer/utils"
 	"os"
 	"time"
@@ -20,13 +19,18 @@ var cfg *ini.File
 var logger *logrus.Logger
 var db *leveldb.DB
 
+var DataSourceType string
+
 var mgCtx *context.Context
 var mongodb *mongo.Database
 
 var snapFile string
 
+var QuitChan = make(chan bool)
+var StopSuccessCount uint = 0
+
 func init() {
-	log.Println("global init")
+	logger.Println("global init")
 	var snapshotAt string
 	flag.StringVar(&snapFile, "snapshot", "", "the filename of snapshot")
 	flag.StringVar(&snapshotAt, "snapshot-at", "", "the block that create snapshot")
@@ -48,7 +52,8 @@ func init() {
 
 	initLogger()
 	initLevelDb()
-	initMongo()
+
+	initDataSource()
 
 	initSync()
 
@@ -90,19 +95,26 @@ func initLevelDb() {
 	}
 }
 
-func initMongo() {
-	dbCfg := cfg.Section("mongo")
-	dbUri := dbCfg.Key("uri").String()
+func initDataSource() {
+	dsCfg := cfg.Section("data-source")
+	DataSourceType = dsCfg.Key("type").String()
+	dsUri := dsCfg.Key("uri").String()
 
-	cs, err := connstring.ParseAndValidate(dbUri)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	mgCtx = &ctx
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(dbUri))
-	if err != nil {
-		panic("connect to mongo failed:" + err.Error())
+	if DataSourceType == "mongo" {
+		cs, err := connstring.ParseAndValidate(dsUri)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		mgCtx = &ctx
+		client, err := mongo.Connect(ctx, options.Client().ApplyURI(dsUri))
+		if err != nil {
+			panic("connect to mongo failed:" + err.Error())
+		}
+		mongodb = client.Database(cs.Database)
+	} else if DataSourceType == "rpc" {
+		fetchUrl = dsUri
+	} else {
+		panic("error data source type")
 	}
-	mongodb = client.Database(cs.Database)
 }
 
 func GetLogger() *logrus.Logger {
@@ -111,5 +123,9 @@ func GetLogger() *logrus.Logger {
 
 func CloseDb() {
 	db.Close()
-	mongodb.Client().Disconnect(*mgCtx)
+	db = nil
+	if mongodb != nil {
+		mongodb.Client().Disconnect(*mgCtx)
+	}
+	mongodb = nil
 }

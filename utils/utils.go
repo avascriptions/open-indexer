@@ -25,6 +25,10 @@ func HexToUint64(hex string) uint64 {
 	}
 }
 
+func HexToUint32(hex string) uint32 {
+	return uint32(HexToUint64(hex))
+}
+
 func HexStrToBytes(hexStr string) []byte {
 	if strings.HasPrefix(hexStr, "0x") {
 		hexStr = hexStr[2:]

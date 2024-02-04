@@ -46,7 +46,7 @@ func InitFromSnapshot() {
 	}
 
 	// save data
-	fetchFromBlock = protoSnapshot.Block
+	syncFromBlock = protoSnapshot.Block
 	inscriptionNumber = protoSnapshot.Number
 	asc20RecordId = protoSnapshot.RecordId
 
@@ -96,16 +96,16 @@ func InitFromSnapshot() {
 		}
 	}
 
-	logger.Printf("init from snapshot, block %d, inscriptionNumber %d, asc20RecordId %d, tokens %d lists %d holders %d", fetchFromBlock, inscriptionNumber, asc20RecordId, tokenCount, listCount, holderCount)
+	logger.Printf("init from snapshot, block %d, inscriptionNumber %d, asc20RecordId %d, tokens %d lists %d holders %d", syncFromBlock, inscriptionNumber, asc20RecordId, tokenCount, listCount, holderCount)
 
 	// todo: set
 	//var updatedTokens
 	//var updatedBalances = make(map[string]string)
 	//var updatedLists = make(map[string]bool)
 
-	saveToStorage(fetchFromBlock)
+	saveToStorage(syncFromBlock)
 
-	fetchFromBlock++
+	syncFromBlock++
 }
 
 func readSnapshotFromText() {
@@ -139,7 +139,7 @@ func readSnapshotFromText() {
 			continue
 		}
 		if nowType == 1 {
-			fetchFromBlock = uint64(utils.ParseInt64(line))
+			syncFromBlock = uint64(utils.ParseInt64(line))
 			if scanner.Scan() {
 				inscriptionNumber = uint64(utils.ParseInt64(scanner.Text()))
 			}
@@ -158,10 +158,10 @@ func readSnapshotFromText() {
 		}
 	}
 
-	logger.Printf("init from snapshot, block %d, inscriptionNumber %d, asc20RecordId %d, tokens %d lists %d holders %d", fetchFromBlock, inscriptionNumber, asc20RecordId, tokenCount, listCount, holderCount)
-	saveToStorage(fetchFromBlock)
+	logger.Printf("init from snapshot, block %d, inscriptionNumber %d, asc20RecordId %d, tokens %d lists %d holders %d", syncFromBlock, inscriptionNumber, asc20RecordId, tokenCount, listCount, holderCount)
+	saveToStorage(syncFromBlock)
 
-	fetchFromBlock++
+	syncFromBlock++
 }
 
 func readToken(line string) {

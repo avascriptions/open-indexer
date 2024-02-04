@@ -3,16 +3,16 @@ package handlers
 import (
 	"errors"
 	"fmt"
-	"github.com/gofiber/fiber/v3"
-	"github.com/gofiber/fiber/v3/middleware/cors"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"google.golang.org/protobuf/proto"
-	"log"
 	"open-indexer/model"
 	"open-indexer/model/serialize"
 	"open-indexer/utils"
 	"regexp"
 	"strings"
+	"time"
 )
 
 var app *fiber.App
@@ -28,7 +28,7 @@ func StartRpc() {
 	}
 
 	fiberCfg := fiber.Config{
-		ErrorHandler: func(c fiber.Ctx, err error) error {
+		ErrorHandler: func(c *fiber.Ctx, err error) error {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"code": fiber.StatusInternalServerError,
 				"msg":  err.Error()},
@@ -52,41 +52,41 @@ func StartRpc() {
 	api.Get("/records-by-txid/:txid", getRecordsByTxId)
 	api.Get("/snapshot/create", createSnapshot)
 
-	log.Fatal(app.Listen(fmt.Sprintf("%s:%d", rpcHost, rpcPort)))
+	app.Listen(fmt.Sprintf("%s:%d", rpcHost, rpcPort))
 }
 
 func StopRpc() {
 	if app != nil {
-		app.Shutdown()
+		app.ShutdownWithTimeout(time.Duration(5) * time.Second) // 5s
 		app = nil
 	}
-}
 
-//func notFound(c fiber.Ctx) error {
-//	return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-//		"code": "404",
-//		"msg":  "rpc not found",
-//	})
-//}
+	StopSuccessCount++
+	logger.Println("rpc stopped")
+}
 
 func isNumeric(s string) bool {
 	re := regexp.MustCompile(`^\d+(\.\d+)?$`)
 	return re.MatchString(s)
 }
 
-func wrapResult(c fiber.Ctx) error {
-	err := c.Next()
+func wrapResult(c *fiber.Ctx) error {
+	if db == nil {
+		return errors.New("database is closed")
+	} else {
+		err := c.Next()
+		if err != nil {
+			return err
+		}
+	}
 	body := string(c.Response().Body())
-	//if !(strings.HasPrefix(body, "{") || strings.HasPrefix(body, "[") || isNumeric(body) || body == "true" || body == "false") {
-	//	body = "\"" + body + "\""
-	//}
 	resp := fmt.Sprintf(`{"code":200,"data":%s}`, body)
 	c.Set("Content-type", "application/json; charset=utf-8")
 	c.Status(fiber.StatusOK).SendString(resp)
-	return err
+	return nil
 }
 
-func getTokens(c fiber.Ctx) error {
+func getTokens(c *fiber.Ctx) error {
 	allTokens := make([]*model.Token, 0, len(tokens))
 	for _, token := range tokens {
 		allTokens = append(allTokens, token)
@@ -94,7 +94,7 @@ func getTokens(c fiber.Ctx) error {
 	return c.JSON(allTokens)
 }
 
-func getToken(c fiber.Ctx) error {
+func getToken(c *fiber.Ctx) error {
 	tick := strings.ToLower(c.Params("tick"))
 	token, ok := tokens[tick]
 	if !ok {
@@ -103,7 +103,7 @@ func getToken(c fiber.Ctx) error {
 	return c.JSON(token)
 }
 
-func getTokenHolders(c fiber.Ctx) error {
+func getTokenHolders(c *fiber.Ctx) error {
 	tick := strings.ToLower(c.Params("tick"))
 	holders, ok := tokenHolders[tick]
 	if !ok {
@@ -112,7 +112,7 @@ func getTokenHolders(c fiber.Ctx) error {
 	return c.JSON(holders)
 }
 
-func getAddress(c fiber.Ctx) error {
+func getAddress(c *fiber.Ctx) error {
 	addr := strings.ToLower(c.Params("addr"))
 	tick := strings.ToLower(c.Params("tick"))
 	addrBalances, ok := balances[addr]
@@ -130,7 +130,10 @@ func getAddress(c fiber.Ctx) error {
 	return c.JSON(addrBalances)
 }
 
-func getRecordsByBlock(c fiber.Ctx) error {
+func getRecordsByBlock(c *fiber.Ctx) error {
+	if db == nil {
+		return errors.New("database is closed")
+	}
 	// read tokens
 	fromBlock := utils.ParseInt64(c.Query("fromBlock", "0"))
 	toBlock := utils.ParseInt64(c.Query("toBlock", "0"))
@@ -174,7 +177,7 @@ func getRecordsByBlock(c fiber.Ctx) error {
 //	return nil
 //}
 
-func getRecordsByTxId(c fiber.Ctx) error {
+func getRecordsByTxId(c *fiber.Ctx) error {
 	txid := strings.ToLower(c.Params("txid"))
 	if !strings.HasPrefix(txid, "0x") || len(txid) != 66 {
 		return errors.New("incorrect txid format")
@@ -200,7 +203,7 @@ func getRecordsByTxId(c fiber.Ctx) error {
 	return c.JSON(records)
 }
 
-func createSnapshot(c fiber.Ctx) error {
+func createSnapshot(c *fiber.Ctx) error {
 	block := c.Query("block", "0")
 	if block == "0" {
 		createSnapshotFlag = true

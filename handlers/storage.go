@@ -6,7 +6,6 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"google.golang.org/protobuf/proto"
-	"log"
 	"open-indexer/model"
 	"open-indexer/model/serialize"
 	"open-indexer/utils"
@@ -29,7 +28,7 @@ func initFromStorage() error {
 	if blockNumber == 0 {
 		return errors.New("read block from database error")
 	}
-	fetchFromBlock = blockNumber + 1
+	syncFromBlock = blockNumber + 1
 
 	value, err = db.Get([]byte("h-number"), nil)
 	if err != nil {
@@ -43,9 +42,9 @@ func initFromStorage() error {
 	}
 	asc20RecordId = utils.BytesToUint64(value)
 
-	log.Printf("block: %d, number: %d, asc20 id: %d", fetchFromBlock, inscriptionNumber, asc20RecordId)
+	logger.Printf("block: %d, number: %d, asc20 id: %d", syncFromBlock, inscriptionNumber, asc20RecordId)
 
-	//if fetchFromBlock > 0 {
+	//if syncFromBlock > 0 {
 	//	return errors.New("test here")
 	//}
 
@@ -100,7 +99,7 @@ func initFromStorage() error {
 	}
 	iter.Release()
 
-	log.Println("current block", fetchFromBlock)
+	logger.Println("current block", syncFromBlock)
 
 	return nil
 }

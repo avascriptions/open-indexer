@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"go.mongodb.org/mongo-driver/bson"
-	"log"
 	"open-indexer/model"
+	"strings"
 	"time"
 )
 
@@ -15,13 +15,15 @@ import (
 var dataStartBlock uint64
 var dataEndBlock uint64
 
-var fetchFromBlock uint64
-var fetchToBlock uint64
+var syncFromBlock uint64
+var syncToBlock uint64
 var fetchSize uint64
 
 var latestBlock uint64
 var createSnapshotFlag bool
 var createSnapshotBlock uint64
+
+var syncInterrupt bool
 
 func initSync() {
 	synCfg := cfg.Section("sync")
@@ -29,104 +31,101 @@ func initSync() {
 	dataEndBlock = synCfg.Key("end").MustUint64(0)
 	fetchSize = synCfg.Key("size").MustUint64(1)
 
-	fetchFromBlock = dataStartBlock
+	syncFromBlock = dataStartBlock
 
 	if dataEndBlock > 0 && dataStartBlock > dataEndBlock {
 		panic("block number error")
 	}
 }
 
-func SyncBlock() (bool, error) {
-	var trxs []*model.Transaction
-	var logs []*model.EvmLog
+func StartSync() {
+	for !syncInterrupt {
+		finished, err := syncBlock()
+		if err != nil {
+			if strings.HasPrefix(err.Error(), "sync: no more new block") {
+				logger.Println(err.Error() + ", wait 1s")
+				time.Sleep(time.Duration(1) * time.Second)
+				continue
+			}
+			logger.Errorln("sync error:", err)
+			QuitChan <- true
+			break
+		}
+		if finished {
+			logger.Println("sync finished")
+			QuitChan <- true
+			break
+		}
+	}
 
-	fetchToBlock = fetchFromBlock + fetchSize - 1
+	StopSuccessCount++
+	logger.Println("sync stopped")
+}
+
+func StopSync() {
+	syncInterrupt = true
+}
+
+func syncBlock() (bool, error) {
+
+	syncToBlock = syncFromBlock + fetchSize - 1
 
 	// Modify parameters for faster synchronization
-	//if fetchFromBlock < 37400000 {
-	//	fetchToBlock = fetchFromBlock + 100000 - 1
-	//} else if fetchFromBlock < 37900000 {
-	//	fetchToBlock = fetchFromBlock + 50000 - 1
-	//} else if fetchFromBlock < 38400000 {
-	//	fetchToBlock = fetchFromBlock + 5000 - 1
-	//} else if fetchFromBlock < 38900000 {
-	//	fetchToBlock = fetchFromBlock + 2000 - 1
-	//} else if fetchFromBlock < 40000000 {
-	//	fetchToBlock = fetchFromBlock + 500 - 1
-	//} else if fetchFromBlock < 40560000 {
-	//	fetchToBlock = fetchFromBlock + 1000 - 1
+	//if syncFromBlock < 37400000 {
+	//	syncToBlock = syncFromBlock + 100000 - 1
+	//} else if syncFromBlock < 37900000 {
+	//	syncToBlock = syncFromBlock + 50000 - 1
+	//} else if syncFromBlock < 38400000 {
+	//	syncToBlock = syncFromBlock + 5000 - 1
+	//} else if syncFromBlock < 38900000 {
+	//	syncToBlock = syncFromBlock + 2000 - 1
+	//} else if syncFromBlock < 40000000 {
+	//	syncToBlock = syncFromBlock + 500 - 1
+	//} else if syncFromBlock < 40560000 {
+	//	syncToBlock = syncFromBlock + 1000 - 1
 	//}
 
-	if dataEndBlock > 0 && fetchToBlock > dataEndBlock {
-		fetchToBlock = dataEndBlock
+	if dataEndBlock > 0 && syncToBlock > dataEndBlock {
+		syncToBlock = dataEndBlock
 	}
 
 	// read trxs
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	if latestBlock == 0 || fetchToBlock >= latestBlock {
-		statusCollection := mongodb.Collection("status")
-		result := statusCollection.FindOne(ctx, bson.D{})
-		if result.Err() != nil {
-			return false, result.Err()
+	if latestBlock == 0 || syncToBlock >= latestBlock {
+		var err error
+		latestBlock, err = getLatestBlock()
+		if err != nil {
+			return false, err
 		}
-		var status model.Status
-		result.Decode(&status)
-		latestBlock = status.Block
 
-		if latestBlock > fetchFromBlock && latestBlock-fetchFromBlock < 10 {
+		if latestBlock > syncFromBlock && latestBlock-syncFromBlock < 10 {
 			// It's catching up. read it block by block.
 			fetchSize = 1
 		}
 
-		if latestBlock < fetchFromBlock-1 {
+		if latestBlock < syncFromBlock-1 {
 			return false, errors.New("the latest block is smaller than the current block")
 		}
 	}
 
-	if fetchToBlock > latestBlock {
-		fetchToBlock = latestBlock
+	if syncToBlock > latestBlock {
+		syncToBlock = latestBlock
 	}
 
-	if fetchFromBlock > fetchToBlock {
+	if syncFromBlock > syncToBlock {
 		checkSnapshot()
-		return false, errors.New(fmt.Sprintf("no more new block, block %d", fetchToBlock))
+		return false, errors.New(fmt.Sprintf("sync: no more new block, block %d", syncToBlock))
 	}
 
-	log.Printf("fetch %d to %d", fetchFromBlock, fetchToBlock)
-	trxCollection := mongodb.Collection("transactions")
-	cur, err := trxCollection.Find(ctx, bson.D{{"block", bson.D{{"$gte", fetchFromBlock}, {"$lte", fetchToBlock}}}})
-	defer cur.Close(ctx)
+	logger.Printf("sync block from %d to %d", syncFromBlock, syncToBlock)
+	trxs, err := getTransactions()
 	if err != nil {
-		logger.Println(err)
 		return false, err
-	}
-	for cur.Next(ctx) {
-		var result model.Transaction
-		err := cur.Decode(&result)
-		if err != nil {
-			logger.Fatal(err)
-		}
-		trxs = append(trxs, &result)
 	}
 
 	// read logs
-	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	logCollection := mongodb.Collection("evmlogs")
-	cur, err = logCollection.Find(ctx, bson.D{{"block", bson.D{{"$gte", fetchFromBlock}, {"$lte", fetchToBlock}}}})
-	defer cur.Close(ctx)
+	logs, err := getLogs()
 	if err != nil {
 		return false, err
-	}
-	for cur.Next(ctx) {
-		var result model.EvmLog
-		err := cur.Decode(&result)
-		if err != nil {
-			logger.Fatal(err)
-		}
-		logs = append(logs, &result)
 	}
 
 	records := mixRecords(trxs, logs)
@@ -135,25 +134,118 @@ func SyncBlock() (bool, error) {
 		return false, err
 	}
 
-	err = saveToStorage(fetchToBlock)
+	err = saveToStorage(syncToBlock)
 	if err != nil {
 		return false, err
 	}
 
 	checkSnapshot()
 
-	fetchFromBlock = fetchToBlock + 1
+	syncFromBlock = syncToBlock + 1
 
-	return fetchToBlock == dataEndBlock, err
+	return syncToBlock == dataEndBlock, err
 }
 
 func checkSnapshot() {
 	// create a snapshot
-	if createSnapshotFlag || fetchToBlock == createSnapshotBlock {
+	if createSnapshotFlag || syncToBlock == createSnapshotBlock {
 		createSnapshotFlag = false
-		if fetchToBlock == createSnapshotBlock {
+		if syncToBlock == createSnapshotBlock {
 			createSnapshotBlock = 0
 		}
-		snapshot(fetchToBlock)
+		snapshot(syncToBlock)
 	}
+}
+
+func getLatestBlock() (uint64, error) {
+	if DataSourceType == "mongo" {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		statusCollection := mongodb.Collection("status")
+		result := statusCollection.FindOne(ctx, bson.D{})
+		if result.Err() != nil {
+			return 0, result.Err()
+		}
+		var status model.Status
+		result.Decode(&status)
+
+		return status.Block, nil
+	} else {
+		blockNumber := cachedBlockNumber
+		if blockNumber == 0 {
+			blockNumber = syncFromBlock - 1
+		}
+		return blockNumber, nil
+	}
+}
+
+func getTransactions() ([]*model.Transaction, error) {
+	var trxs []*model.Transaction
+	if DataSourceType == "mongo" {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		trxCollection := mongodb.Collection("transactions")
+		cur, err := trxCollection.Find(ctx, bson.D{{"block", bson.D{{"$gte", syncFromBlock}, {"$lte", syncToBlock}}}})
+		defer cur.Close(ctx)
+		if err != nil {
+			logger.Println(err)
+			return nil, err
+		}
+		for cur.Next(ctx) {
+			var result model.Transaction
+			err := cur.Decode(&result)
+			if err != nil {
+				logger.Fatal(err)
+			}
+			trxs = append(trxs, &result)
+		}
+	} else {
+		for block := syncFromBlock; block <= syncToBlock; block++ {
+			_trxs, ok := cachedTranscriptions[block]
+			if !ok {
+				if block == syncFromBlock {
+					return nil, errors.New(fmt.Sprintf("trxs not cached at %d", block))
+				} else {
+					break
+				}
+			}
+			trxs = append(trxs, _trxs...)
+		}
+	}
+	return trxs, nil
+}
+
+func getLogs() ([]*model.EvmLog, error) {
+	var logs []*model.EvmLog
+	if DataSourceType == "mongo" {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		logCollection := mongodb.Collection("evmlogs")
+		cur, err := logCollection.Find(ctx, bson.D{{"block", bson.D{{"$gte", syncFromBlock}, {"$lte", syncToBlock}}}})
+		defer cur.Close(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for cur.Next(ctx) {
+			var result model.EvmLog
+			err := cur.Decode(&result)
+			if err != nil {
+				logger.Fatal(err)
+			}
+			logs = append(logs, &result)
+		}
+	} else {
+		for block := syncFromBlock; block <= syncToBlock; block++ {
+			_logs, ok := cachedLogs[block]
+			if !ok {
+				if block == syncFromBlock {
+					return nil, errors.New(fmt.Sprintf("logs not cached at %d", block))
+				} else {
+					break
+				}
+			}
+			logs = append(logs, _logs...)
+		}
+	}
+	return logs, nil
 }

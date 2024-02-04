@@ -4,15 +4,12 @@ import (
 	"open-indexer/handlers"
 	"os"
 	"os/signal"
-	"strings"
 	"time"
 )
 
 func main() {
 
 	oss := make(chan os.Signal)
-	done := make(chan bool)
-	var interrupt = false
 
 	var logger = handlers.GetLogger()
 
@@ -24,38 +21,38 @@ func main() {
 		handlers.StartRpc()
 	}()
 
-	go func() {
-		logger.Info("app is started")
-		for !interrupt {
-			finished, err := handlers.SyncBlock()
-			if err != nil {
-				if strings.HasPrefix(err.Error(), "no more new block") {
-					logger.Println(err.Error() + ", wait 1s")
-					time.Sleep(time.Duration(1) * time.Second)
-					continue
-				}
-				logger.Errorln("sync error:", err)
-				break
-			}
-			if finished {
-				break
-			}
-		}
-
-		handlers.CloseDb()
-
+	if handlers.DataSourceType == "rpc" {
 		go func() {
-			handlers.StopRpc()
+			handlers.StartFetch()
 		}()
+	}
 
-		done <- true
-
+	go func() {
+		handlers.StartSync()
 	}()
 
 	stop := func() {
-		interrupt = true
-		<-done
-		logger.Info("gracefully stopped")
+		logger.Info("app is stopping")
+		go func() {
+			handlers.StopRpc()
+		}()
+		go func() {
+			handlers.StopSync()
+		}()
+		go func() {
+			handlers.StopFetch()
+		}()
+
+		// wait all stopped
+		for handlers.StopSuccessCount < 3 {
+			time.Sleep(time.Duration(100) * time.Millisecond)
+		}
+
+		// close db
+		handlers.CloseDb()
+
+		logger.Info("app stopped.")
+
 	}
 
 	// 监听信号
@@ -64,11 +61,14 @@ func main() {
 	for {
 		select {
 		case <-oss: // kill -9 pid，no effect
-			logger.Info("stop by system...")
+			logger.Info("stopped by system...")
 			stop()
+			logger.Info("gracefully stopped.")
 			return
-		case <-done:
-			logger.Info("app is stopped.")
+		case <-handlers.QuitChan:
+			logger.Info("stopped by app.")
+			stop()
+			logger.Info("app is auto stopped.")
 			return
 		}
 	}
