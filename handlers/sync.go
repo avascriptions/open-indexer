@@ -212,6 +212,8 @@ func getTransactions() ([]*model.Transaction, error) {
 				} else {
 					break
 				}
+			} else {
+				delete(cachedTranscriptions, block)
 			}
 			trxs = append(trxs, _trxs...)
 		}
@@ -247,6 +249,8 @@ func getLogs() ([]*model.EvmLog, error) {
 				} else {
 					break
 				}
+			} else {
+				delete(cachedLogs, block)
 			}
 			logs = append(logs, _logs...)
 		}
