@@ -10,6 +10,7 @@ import (
 	"go.mongodb.org/mongo-driver/x/mongo/driver/connstring"
 	"gopkg.in/ini.v1"
 	"io"
+	"log"
 	"open-indexer/utils"
 	"os"
 	"time"
@@ -30,7 +31,7 @@ var QuitChan = make(chan bool)
 var StopSuccessCount uint = 0
 
 func init() {
-	logger.Println("global init")
+	log.Println("global init")
 	var snapshotAt string
 	flag.StringVar(&snapFile, "snapshot", "", "the filename of snapshot")
 	flag.StringVar(&snapshotAt, "snapshot-at", "", "the block that create snapshot")
