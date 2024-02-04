@@ -1,8 +1,11 @@
 [leveldb]
 path=data/data.db
 
-[mongo]
-uri=mongodb://127.0.0.1:27017/database
+[data-source]
+type=rpc
+uri=https://api.avax.network/ext/bc/C/rpc
+#type=mongo
+#uri=mongodb://127.0.0.1:27017/database
 
 [rpc]
 host=*
