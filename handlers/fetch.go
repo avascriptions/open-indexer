@@ -38,9 +38,9 @@ func StartFetch() {
 		var err error
 		lastBlockNumber, err = fetchLastBlockNumber()
 		if err != nil {
-			panic("fetch lastBlockNumber error")
+			panic("fetch last block number error")
 		}
-		logger.Println("lastBlockNumber", lastBlockNumber)
+		logger.Println("fetch: last block number", lastBlockNumber)
 	}
 
 	// fetch
@@ -57,7 +57,7 @@ func StartFetch() {
 		} else {
 			err = saveData(&trxsResp, &logsResp)
 			if err != nil {
-				logger.Println("save error:", err.Error())
+				logger.Println("fetch: save error:", err.Error())
 				QuitChan <- true
 				break
 			}
@@ -78,7 +78,7 @@ func StopFetch() {
 func fetchData(blockNumber uint64, blockResp *fetch.BlockResponse, logsResp *fetch.LogsResponse) error {
 	start := time.Now().UnixMilli()
 
-	if blockNumber == lastBlockNumber {
+	if blockNumber > lastBlockNumber {
 		lastBlock, err := fetchLastBlockNumber()
 		if err != nil {
 			return nil
