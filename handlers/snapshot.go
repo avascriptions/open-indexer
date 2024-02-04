@@ -80,11 +80,17 @@ func InitFromSnapshot() {
 	for idx := range protoSnapshot.Balances {
 		userBalances := protoSnapshot.Balances[idx]
 		address := utils.BytesToHexStr(userBalances.Address)
+		if address == "0x" {
+			continue
+		}
 		balances[address] = make(map[string]*model.DDecimal)
 		for idx2 := range userBalances.Balances {
 			tickBalance := userBalances.Balances[idx2]
 
 			lowerTick := strings.ToLower(tickBalance.Tick)
+			if lowerTick == "" {
+				continue
+			}
 			balance, _, _ := model.NewDecimalFromString(tickBalance.Amount)
 
 			balances[address][lowerTick] = balance
