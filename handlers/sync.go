@@ -116,6 +116,7 @@ func syncBlock() (bool, error) {
 		return false, errors.New(fmt.Sprintf("sync: no more new block, block %d", syncToBlock))
 	}
 
+	start := time.Now().UnixMilli()
 	logger.Printf("sync block from %d to %d", syncFromBlock, syncToBlock)
 	trxs, err := getTransactions()
 	if err != nil {
@@ -140,6 +141,9 @@ func syncBlock() (bool, error) {
 	}
 
 	checkSnapshot()
+
+	costs := time.Now().UnixMilli() - start
+	logger.Println("sync finished, costs ", costs, " ms")
 
 	syncFromBlock = syncToBlock + 1
 

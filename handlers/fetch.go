@@ -18,6 +18,7 @@ var fetchUrl = ""
 
 var fetchDataBlock uint64
 var fetchInterrupt bool
+var lastBlockNumber uint64
 
 var cachedTranscriptions = make(map[uint64][]*model.Transaction)
 var cachedLogs = make(map[uint64][]*model.EvmLog)
@@ -28,9 +29,19 @@ func StartFetch() {
 	//if err == nil {
 	//	fetchDataBlock = utils.BytesToUint64(value)
 	//} else {
-	fetchDataBlock = syncFromBlock - 1
+	//  fetchDataBlock = syncFromBlock - 1
 	//}
+	fetchDataBlock = syncFromBlock - 1
 	logger.Println("start fetch data from ", fetchDataBlock+1)
+
+	if lastBlockNumber == 0 {
+		var err error
+		lastBlockNumber, err = fetchLastBlockNumber()
+		if err != nil {
+			panic("fetch lastBlockNumber error")
+		}
+		logger.Println("lastBlockNumber", lastBlockNumber)
+	}
 
 	// fetch
 	fetchInterrupt = false
@@ -59,10 +70,26 @@ func StartFetch() {
 
 func StopFetch() {
 	fetchInterrupt = true
+	if DataSourceType != "rpc" {
+		StopSuccessCount++
+	}
 }
 
 func fetchData(blockNumber uint64, blockResp *fetch.BlockResponse, logsResp *fetch.LogsResponse) error {
 	start := time.Now().UnixMilli()
+
+	if blockNumber == lastBlockNumber {
+		lastBlock, err := fetchLastBlockNumber()
+		if err != nil {
+			return nil
+		}
+		lastBlockNumber = lastBlock
+	}
+
+	if blockNumber > lastBlockNumber {
+		return errors.New("no new blocks to be fetched")
+	}
+
 	var wg sync.WaitGroup
 	var err0 error
 	var err1 error
@@ -90,6 +117,38 @@ func fetchData(blockNumber uint64, blockResp *fetch.BlockResponse, logsResp *fet
 		logger.Info("fetch data at #", blockNumber, " costs ", costs, " ms")
 	}
 	return nil
+}
+
+func fetchLastBlockNumber() (uint64, error) {
+	//start := time.Now().UnixMilli()
+	reqJson := fmt.Sprintf(`{"id": "indexer","jsonrpc": "2.0","method": "eth_blockNumber","params": []}`)
+	resp, rerr := req.R().EnableTrace().
+		SetHeader("Content-Type", "application/json").
+		SetHeader("Accept", "application/json").
+		SetBody(reqJson).
+		Post(fetchUrl)
+	if rerr != nil {
+		logger.Info("fetch url error:", rerr)
+		return 0, rerr
+	}
+
+	var response fetch.NumberResponse
+	uerr := json.Unmarshal(resp.Body(), &response)
+	if uerr != nil {
+		logger.Info("json parse error: ", uerr)
+		fmt.Println(string(resp.Body()))
+		return 0, rerr
+	}
+	if response.Error.Code != 0 && response.Error.Message != "" {
+		return 0, errors.New(fmt.Sprintf("fetch error code: %d, msg: %s", response.Error.Code, response.Error.Message))
+	}
+	if response.Id != "indexer" || response.JsonRpc != "2.0" {
+		return 0, errors.New("fetch error data")
+	}
+
+	blockNumber := utils.HexToUint64(response.Result) - 2
+
+	return blockNumber, nil
 }
 
 func fetchTransactions(blockNumber uint64, response *fetch.BlockResponse) (err error) {
