@@ -81,7 +81,7 @@ func fetchData(blockNumber uint64, blockResp *fetch.BlockResponse, logsResp *fet
 	if blockNumber > lastBlockNumber {
 		lastBlock, err := fetchLastBlockNumber()
 		if err != nil {
-			return nil
+			return err
 		}
 		lastBlockNumber = lastBlock
 	}
