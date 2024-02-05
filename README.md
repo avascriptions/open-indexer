@@ -15,7 +15,8 @@ Specify the snapshot file command:
 ./indexer --snapshot snapshots/snap-xxx.bin  
 
 Of course if you can't run from the genesis block, you can download snapshots from us and the following snapshots are updated regularly.  
-https://snapshots.avascriptions.com/snap-40953600.bin.zip MD5: 73dfea130fe840b81289ac4169f68678
+01-28 [snap-40953600.bin.zip](https://snapshots.avascriptions.com/snap-40953600.bin.zip) MD5: 73dfea130fe840b81289ac4169f68678  
+02-04 [snap-41256000.bin.zip](https://snapshots.avascriptions.com/snap-41256000.bin.zip) MD5: 9e0c2468d0fe44566eafc209bc22f998  
 
 ## RPC Interfaces
 The indexer implements simple RPC interfaces, the list of interfaces is as follows  
