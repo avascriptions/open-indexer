@@ -2,12 +2,13 @@
 
 Open source indexer for avascriptions 
 
+## How to use
+copy config.ini.sample to config.ini and configure it accordingly  
 build: go build -o ./indexer ./cmd/main.go  
 run: ./indexer
 
 ## Data source
-You have to provide the data source yourself, this app reads the chained data from mongodb by default.  
-We provide an open source program for grabbing data on the chain that can be referenced for you: https://github.com/avascriptions/fetch-chaindata
+This program has come with block data grabbing function, you can also use an external data grabbing program, We also provide an open source program for grabbing chain data and storing it in mongodb for your reference: https://github.com/avascriptions/fetch-chaindata
 
 ## Snapshot
 Currently the indexed data is not persisted, you must rely on a snapshot to start each time you start, if you do not specify a snapshot, the indexer will start indexing from the initial data.  
